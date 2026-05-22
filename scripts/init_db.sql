@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS regionen (
     region_id     SERIAL PRIMARY KEY,
     ags           VARCHAR(8) UNIQUE NOT NULL,
     name          TEXT NOT NULL,
-    level         VARCHAR(20) NOT NULL, -- 'bundesland' | 'landkreis'
+    level         VARCHAR(20) NOT NULL,
     parent_ags    VARCHAR(8),
     geometrie     GEOMETRY(MULTIPOLYGON, 4326)
 );
@@ -14,19 +14,32 @@ CREATE INDEX IF NOT EXISTS idx_regionen_ags  ON regionen (ags);
 
 CREATE TABLE IF NOT EXISTS unfaelle (
     unfall_id     SERIAL PRIMARY KEY,
-    extern_id     TEXT UNIQUE,
+
+    extern_id     TEXT UNIQUE NOT NULL,
+
     jahr          INT,
     monat         INT,
     stunde        INT,
     wochentag     INT,
+
+    bundesland    INT,
+
     kategorie     INT,
     typ           INT,
-    licht         INT,
-    teilnehmer    INT,
+
+    ist_rad       BOOLEAN,
+    ist_fuss      BOOLEAN,
+    ist_pkw       BOOLEAN,
+    ist_kraftrad  BOOLEAN,
+
     lon           DOUBLE PRECISION,
     lat           DOUBLE PRECISION,
+
     geom          GEOMETRY(POINT, 4326),
-    region_id     INT REFERENCES regionen(region_id)
+
+    region_id     INT REFERENCES regionen(region_id),
+
+    importiert_am TIMESTAMP DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_unfaelle_region ON unfaelle (region_id);
@@ -47,7 +60,9 @@ CREATE TABLE IF NOT EXISTS import_log (
     gestartet_am  TIMESTAMP DEFAULT NOW(),
     beendet_am    TIMESTAMP,
     status        TEXT,
-    anzahl_saetze INT,
+    verabeitet    INT,
+    hinzugef      INT,
+    verworfen     INT,
     hinweis       TEXT
 );
 
