@@ -1,0 +1,10 @@
+pandas
+geopandas
+psycopg2-binary
+requests
+fastapi
+uvicorn
+asyncpg
+python-dotenv
+shapely
+pyproj
