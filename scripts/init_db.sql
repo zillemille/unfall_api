@@ -20,9 +20,11 @@ CREATE TABLE IF NOT EXISTS unfaelle (
     jahr          INT,
     monat         INT,
     stunde        INT,
-    wochentag     INT,
 
     bundesland    INT,
+    regierungsbezirk INT,
+    kreis         INT,
+    gemeinde      INT,
 
     kategorie     INT,
     typ           INT,

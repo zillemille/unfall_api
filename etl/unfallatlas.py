@@ -1,3 +1,6 @@
+from collections import Counter
+from collections.abc import Collection
+
 import pandas as pd
 import psycopg2
 
@@ -26,12 +29,16 @@ def load_csv():
         CSV_PATH,
         sep=";",
         dtype={
-            "ULAND": str
+            "ULAND": str,
+            'UIDENTSTLAE': str,
+            'UREGBEZ': int,
+            'UKREIS': int,
+            'UGEMEINDE': int,
+
         },
         decimal=",",
     )
 
-    print(df.dtypes)
 
     print(f"{len(df)} Zeilen geladen")
 
@@ -47,6 +54,10 @@ def transform_data(df):
 
 
     df["bundesland"] = pd.to_numeric(df["ULAND"], errors="coerce")
+    df["regierungsbezirk"] = pd.to_numeric(df["UREGBEZ"], errors="coerce")
+    df["kreis"] = pd.to_numeric(df["UKREIS"], errors="coerce")
+    df["gemeinde"] = pd.to_numeric(df["UGEMEINDE"], errors="coerce")
+
 
     df["jahr"] = pd.to_numeric(df["UJAHR"], errors="coerce")
     df["monat"] = pd.to_numeric(df["UMONAT"], errors="coerce")
@@ -68,6 +79,9 @@ def transform_data(df):
         "monat",
         "stunde",
         "bundesland",
+        "regierungsbezirk",
+        "kreis",
+        "gemeinde",
         "kategorie",
         "typ",
         "ist_rad",
@@ -116,6 +130,9 @@ def insert_data(conn, df):
             row["monat"],
             row["stunde"],
             row["bundesland"],
+            row["regierungsbezirk"],
+            row["kreis"],
+            row["gemeinde"],
             row["kategorie"],
             row["typ"],
             row["ist_rad"],
@@ -133,6 +150,9 @@ def insert_data(conn, df):
             monat,
             stunde,
             bundesland,
+            regierungsbezirk,
+            kreis,
+            gemeinde,
             kategorie,
             typ,
             ist_rad,
