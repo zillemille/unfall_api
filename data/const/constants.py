@@ -25,6 +25,25 @@ BUNDESLAENDER = {
     "16": "Thüringen",
 }
 
+BUNDESLÄNDER_AGS = {
+            "01000000": "Schleswig-Holstein",
+            "02000000": "Hamburg",
+            "03000000": "Niedersachsen",
+            "04000000": "Bremen",
+            "05000000": "Nordrhein-Westfalen",
+            "06000000": "Hessen",
+            "07000000": "Rheinland-Pfalz",
+            "08000000": "Baden-Württemberg",
+            "09000000": "Bayern",
+            "10000000": "Saarland",
+            "11000000": "Berlin",
+            "12000000": "Brandenburg",
+            "13000000": "Mecklenburg-Vorpommern",
+            "14000000": "Sachsen",
+            "15000000": "Sachsen-Anhalt",
+            "16000000": "Thüringen"
+        }
+
 UNFALLKATEGORIE = {
     "1" : "Unfall mit Getöteten",
     "2" : "Unfall mit Schwerverletzten",

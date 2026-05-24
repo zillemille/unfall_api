@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS import_log (
     gestartet_am  TIMESTAMP DEFAULT NOW(),
     beendet_am    TIMESTAMP,
     status        TEXT,
-    verabeitet    INT,
+    verarbeitet    INT,
     hinzugef      INT,
     verworfen     INT,
     hinweis       TEXT

@@ -1,6 +1,3 @@
-from collections import Counter
-from collections.abc import Collection
-
 import pandas as pd
 import psycopg2
 
@@ -8,7 +5,7 @@ from psycopg2.extras import execute_values
 from pathlib import Path
 
 from data.const.constants import DB_CONFIG
-from data.const.constants import BUNDESLAENDER
+
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,8 +19,6 @@ def load_csv():
     """
     Lädt die CSV-Datei mit pandas.
     """
-
-    print("Lade CSV-Datei...")
 
     df = pd.read_csv(
         CSV_PATH,
@@ -167,7 +162,11 @@ def insert_data(conn, df):
         RETURNING unfall_id;
     """
 
-    inserted_rows = execute_values(cursor, query, values, fetch=True)
+    inserted_rows = execute_values(
+        cursor,
+        query,
+        values,
+        fetch=True)
     count_inserted = len(inserted_rows)
     count_processed = len(values)
     count_skipped = count_processed - count_inserted
@@ -192,7 +191,7 @@ def write_import_log(conn, status, log_info, hinweis=None):
             quelle,
             beendet_am,
             status,
-            verabeitet,
+            verarbeitet,
             hinzugef,
             verworfen,
             hinweis
