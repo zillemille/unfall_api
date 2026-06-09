@@ -222,8 +222,6 @@ def main():
             log_info=log_info
         )
 
-        print("ETL erfolgreich abgeschlossen")
-
     except Exception as e:
 
         print("FEHLER:")

@@ -11,10 +11,7 @@ from data.const.constants import BUNDESLÄNDER_AGS
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 GEOJSON_PATH = (
-    BASE_DIR
-    / "data"
-    / "regioatlas"
-    / "regioatlas.geojson"
+    BASE_DIR / "data" / "regionalatlas" / "regionalatlas.geojson"
 )
 
 
@@ -245,8 +242,10 @@ def main():
         print("conn")
         conn = create_connection()
 
+
         print("insert")
         log_info = insert_data(conn, gdf)
+
 
         print("log")
         write_import_log(

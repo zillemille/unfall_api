@@ -219,9 +219,6 @@ def main():
 
         df = transform_data(df)
 
-        # erstmal nur 100 Zeilen testen
-        df = df.head(100)
-
         conn = create_connection()
 
         log_info = insert_data(conn, df)
