@@ -1,6 +1,4 @@
-from etl import unfallatlas
-from etl import regionalatlas
-from etl import genesis
+from etl import unfallatlas, regionalatlas, genesis, checks
 
 
 def run_step(name, func):
@@ -21,6 +19,8 @@ def main():
     run_step("Unfallatlas", unfallatlas.main)
     run_step("Regionalatlas", regionalatlas.main)
     run_step("GENESIS", genesis.main)
+
+    run_step("checks",checks.run_checks())
 
 
 if __name__ == "__main__":
