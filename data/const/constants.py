@@ -6,7 +6,29 @@ DB_CONFIG = {
     "dbname": "dbw_db"
 }
 
-BUNDESLAENDER = {
+
+BUNDESLAENDER = [
+    "Baden-Württemberg",
+    "Bayern",
+    "Berlin",
+    "Brandenburg",
+    "Bremen",
+    "Hamburg",
+    "Hessen",
+    "Mecklenburg-Vorpommern",
+    "Niedersachsen",
+    "Nordrhein-Westfalen",
+    "Rheinland-Pfalz",
+    "Saarland",
+    "Sachsen",
+    "Sachsen-Anhalt",
+    "Schleswig-Holstein",
+    "Thüringen"
+]
+
+
+
+BUNDESLAENDER_ID = {
     "01": "Schleswig-Holstein",
     "02": "Hamburg",
     "03": "Niedersachsen",
@@ -58,4 +80,18 @@ UNFALLTYP = {
     "5": "Unfall durch ruhenden Verkehr",
     "6": "Unfall im Längsverkehr",
     "7": "sonstiger Unfall",
+}
+
+STATISTIC_GENESIS = {
+    "-": "nichts vorhanden, genau Null oder ggf. zur Sicherstellung der statistischen Geheimhaltung auf Null geändert",
+    "e": "endgültiger Wert",
+    "0": "Zahlenwert von Null verschieden, jedoch so nahe an Null, dass auf Null gerundet",
+    "r": "berichtigte Zahl",
+    "p": "vorläufige Zahl",
+    "s": "geschätzte Zahl",
+    "()": "Aussagewert eingeschränkt, da der Zahlenwert statistisch relativ unsicher ist",
+    "/": "keine Angaben, da Zahlenwert nicht sicher genug",
+    ".": "Zahlenwert unbekannt oder geheim zu halten",
+    "...": "Angabe fällt später an",
+    "x": "Tabellenfach gesperrt, weil Aussage nicht sinnvoll"
 }

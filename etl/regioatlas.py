@@ -52,8 +52,7 @@ def transform_data(gdf):
     landkreise["ags"] = (
         landkreise["ags"]
         .astype(str)
-        .str.zfill(5)
-        + "000"
+        .apply(normalize_ags)
     )
 
     landkreise["level"] = "landkreis"
@@ -94,6 +93,15 @@ def transform_data(gdf):
     # KOMBINIEREN
     # -----------------------------
 
+    # hamburg, berlin und bremen  rausfiltern aus landkreisen
+    landkreise = landkreise[
+        ~landkreise["ags"].isin([
+            "02000000",
+            "11000000",
+            "04000000"
+        ])
+    ]
+
     gdf_final = pd.concat([
         landkreise,
         bundeslaender
@@ -108,6 +116,19 @@ def transform_data(gdf):
     gdf_final = gdf_final.dropna(subset=["ags"])
 
     return gdf_final
+
+
+def normalize_ags(ags):
+
+    ags = str(ags)
+
+    if len(ags) == 2:
+        return ags + "000000"
+
+    if len(ags) == 5:
+        return ags + "000"
+
+    return None
 
 
 def create_connection():
