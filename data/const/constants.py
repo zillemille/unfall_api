@@ -1,3 +1,4 @@
+# Datenbankkennungen
 DB_CONFIG = {
     "host": "localhost",
     "port": 5432,
@@ -7,6 +8,9 @@ DB_CONFIG = {
 }
 
 
+
+
+# Bundesländerzuordnungen
 BUNDESLAENDER = [
     "Baden-Württemberg",
     "Bayern",
@@ -26,8 +30,6 @@ BUNDESLAENDER = [
     "Thüringen"
 ]
 
-
-
 BUNDESLAENDER_ID = {
     "01": "Schleswig-Holstein",
     "02": "Hamburg",
@@ -45,6 +47,25 @@ BUNDESLAENDER_ID = {
     "14": "Sachsen",
     "15": "Sachsen-Anhalt",
     "16": "Thüringen",
+}
+
+BUNDESLAENDER_NAME = {
+    "Schleswig-Holstein": "01",
+    "Hamburg": "02",
+    "Niedersachsen": "03",
+    "Bremen": "04",
+    "Nordrhein-Westfalen": "05",
+    "Hessen": "06",
+    "Rheinland-Pfalz": "07",
+    "Baden-Württemberg": "08",
+    "Bayern": "09",
+    "Saarland": "10",
+    "Berlin": "11",
+    "Brandenburg": "12",
+    "Mecklenburg-Vorpommern": "13",
+    "Sachsen": "14",
+    "Sachsen-Anhalt": "15",
+    "Thüringen": "16",
 }
 
 BUNDESLÄNDER_AGS = {
@@ -66,6 +87,10 @@ BUNDESLÄNDER_AGS = {
             "16000000": "Thüringen"
         }
 
+
+
+
+# Unfallketegorien
 UNFALLKATEGORIE = {
     "1" : "Unfall mit Getöteten",
     "2" : "Unfall mit Schwerverletzten",
@@ -82,6 +107,10 @@ UNFALLTYP = {
     "7": "sonstiger Unfall",
 }
 
+
+
+
+# Genesis Statistik
 STATISTIC_GENESIS = {
     "-": "nichts vorhanden, genau Null oder ggf. zur Sicherstellung der statistischen Geheimhaltung auf Null geändert",
     "e": "endgültiger Wert",

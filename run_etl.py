@@ -20,6 +20,8 @@ def main():
     run_step("Regionalatlas", regionalatlas.main)
     run_step("GENESIS", genesis.main)
 
+    # WARUM FUNKTIONIERST DU HIER NCIHT??????
+    # todo: zum laufen bekommen
     run_step("checks",checks.run_checks())
 
 
