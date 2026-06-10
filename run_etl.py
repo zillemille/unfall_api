@@ -16,13 +16,11 @@ def run_step(name, func):
 
 def main():
 
-    run_step("Unfallatlas", unfallatlas.main)
     run_step("Regionalatlas", regionalatlas.main)
+    run_step("Unfallatlas", unfallatlas.main)
     run_step("GENESIS", genesis.main)
 
-    # WARUM FUNKTIONIERST DU HIER NCIHT??????
-    # todo: zum laufen bekommen
-    run_step("checks",checks.run_checks())
+    run_step("checks",checks.run_checks)
 
 
 if __name__ == "__main__":

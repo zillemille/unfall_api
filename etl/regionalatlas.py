@@ -52,7 +52,7 @@ def transform_data(gdf):
         .apply(normalize_ags)
     )
 
-    landkreise["level"] = "landkreis"
+    landkreise["level"] = "kreis"
 
     landkreise["parent_ags"] = (
         landkreise["ags"].str[:2]
@@ -90,18 +90,19 @@ def transform_data(gdf):
     # KOMBINIEREN
     # -----------------------------
 
-    # hamburg, berlin und bremen  rausfiltern aus landkreisen
-    landkreise = landkreise[
-        ~landkreise["ags"].isin([
-            "02000000",
-            "11000000",
-            "04000000"
-        ])
-    ]
+    stadtstaaten_ags = ["02000000", "11000000", "04000000"]
+
+    landkreise = landkreise[~landkreise["ags"].isin(stadtstaaten_ags)]  # bleibt
+
+    stadtstaaten_als_kreis = bundeslaender[
+        bundeslaender["ags"].isin(stadtstaaten_ags)
+    ].copy()
+    stadtstaaten_als_kreis["level"] = "kreis"
 
     gdf_final = pd.concat([
         landkreise,
-        bundeslaender
+        bundeslaender,
+        stadtstaaten_als_kreis,  # ← neu
     ], ignore_index=True)
 
     gdf_final["geometrie_wkt"] = (
@@ -150,22 +151,13 @@ def insert_data(conn, gdf):
             row["geometrie_wkt"]
         ))
 
-
+    # insert_data — query anpassen:
     query = """
-        INSERT INTO regionen (
-            ags,
-            name,
-            level,
-            parent_ags,
-            geometrie
-        )
-        VALUES %s
-
-        ON CONFLICT (ags)
-        DO NOTHING
-
-        RETURNING region_id;
-    """
+            INSERT INTO regionen (ags, name, level, parent_ags, geometrie)
+            VALUES %s
+            ON CONFLICT (ags, level) DO NOTHING    
+            RETURNING region_id;
+            """
 
     template = """
     (

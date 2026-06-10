@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS regionen (
     parent_ags    VARCHAR(8),
     geometrie     GEOMETRY(MULTIPOLYGON, 4326)
 );
+ALTER TABLE regionen DROP CONSTRAINT regionen_ags_key;
+ALTER TABLE regionen ADD CONSTRAINT regionen_ags_level_key UNIQUE (ags, level);
 
 CREATE INDEX IF NOT EXISTS idx_regionen_geom ON regionen USING GIST (geometrie);
 CREATE INDEX IF NOT EXISTS idx_regionen_ags  ON regionen (ags);

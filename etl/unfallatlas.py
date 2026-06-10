@@ -209,48 +209,71 @@ def write_import_log(conn, status, log_info, hinweis=None):
     conn.commit()
 
 
+def enrich_geodata(conn):
+    """
+    Schritt 1: geom aus lon/lat generieren.
+    Schritt 2: region_id per räumlichem Join auf Kreis-Ebene setzen.
+    Schritt 3: Fallback für Stadtstaaten (kein Kreis-Eintrag → Bundesland).
+    Muss nach insert_data UND nach Regionalatlas-Import laufen.
+    """
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE unfaelle
+        SET geom = ST_SetSRID(ST_MakePoint(lon, lat), 4326)
+        WHERE geom IS NULL
+          AND lon IS NOT NULL
+          AND lat IS NOT NULL
+    """)
+    print(f"  geom gesetzt: {cursor.rowcount}")
+
+    cursor.execute("""
+        UPDATE unfaelle u
+        SET region_id = r.region_id
+        FROM regionen r
+        WHERE u.region_id IS NULL
+          AND u.geom IS NOT NULL
+          AND r.level = 'kreis'
+          AND ST_Within(u.geom, r.geometrie)
+    """)
+    print(f"  region_id (Kreis): {cursor.rowcount}")
+
+    # Stadtstaaten: bundesland=2 (HH), 4 (HB), 11 (BE)
+    cursor.execute("""
+        UPDATE unfaelle u
+        SET region_id = r.region_id
+        FROM regionen r
+        WHERE u.region_id IS NULL
+          AND u.geom IS NOT NULL
+          AND r.level = 'bundesland'
+          AND u.bundesland IN (2, 4, 11)
+          AND ST_Within(u.geom, r.geometrie)
+    """)
+    print(f"  region_id (Stadtstaat-Fallback): {cursor.rowcount}")
+
+    cursor.execute("SELECT COUNT(*) FROM unfaelle WHERE region_id IS NULL")
+    print(f"  Noch unverknüpft: {cursor.fetchone()[0]}")
+
+    conn.commit()
+
+
 def main():
-
     conn = None
-
     try:
-
         df = load_csv()
-
         df = transform_data(df)
-
         conn = create_connection()
-
         log_info = insert_data(conn, df)
-
-        write_import_log(
-            conn,
-            status="success",
-            log_info=log_info
-        )
-
+        enrich_geodata(conn)                   # ← neu
+        write_import_log(conn, status="success", log_info=log_info)
         print("ETL erfolgreich abgeschlossen")
-
     except Exception as e:
-
-        print("FEHLER:")
-        print(e)
-
+        print("FEHLER:", e)
         if conn:
-
-            write_import_log(
-                conn,
-                status="failed",
-                log_info={
-                    "processed": 0,
-                    "inserted": 0,
-                    "skipped": 0
-                },
-                hinweis=str(e)
-            )
-
+            write_import_log(conn, status="failed",
+                log_info={"processed": 0, "inserted": 0, "skipped": 0},
+                hinweis=str(e))
     finally:
-
         if conn:
             conn.close()
 
