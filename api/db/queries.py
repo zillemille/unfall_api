@@ -25,10 +25,22 @@ def _fetchone(cur) -> any:
 
 # ─── Einfache Abfragen ───────────────────────────────────────────────────────
 
-def get_earliest_year() -> int | None:
-    """Frühestes Unfalljahr im gesamten Datensatz."""
+def get_earliest_year(ags_prefix: str | None = None) -> int | None:
+    """
+    Frühestes Unfalljahr.
+    - Ohne ags_prefix: global (gesamter Datensatz)
+    - Mit ags_prefix:  nur für diese Region
+    """
     with _cursor() as cur:
-        cur.execute("SELECT MIN(jahr) FROM unfaelle")
+        if ags_prefix:
+            cur.execute("""
+                SELECT MIN(u.jahr)
+                FROM unfaelle u
+                JOIN regionen r ON u.region_id = r.region_id
+                WHERE r.ags LIKE %(prefix)s
+            """, {"prefix": f"{ags_prefix}%"})
+        else:
+            cur.execute("SELECT MIN(jahr) FROM unfaelle")
         return _fetchone(cur)
 
 

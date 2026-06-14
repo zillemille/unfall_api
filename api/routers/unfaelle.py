@@ -59,15 +59,33 @@ def _require_level(level: str) -> None:
     "/earliest",
     response_model=EarliestYearResponse,
     summary="Frühestes Datenjahr",
-    description="Gibt das kleinste Jahr zurück, für das Unfalldaten in der Datenbank vorliegen.",
+    description="""
+Gibt das früheste Jahr zurück, für das Unfalldaten vorliegen.
+
+- Ohne `ags_prefix`: global über alle Bundesländer
+- Mit `ags_prefix`: nur für die angegebene Region
+
+**Beispiele:**
+- Frühestes Jahr gesamt: `/accidents/earliest`
+- Frühestes Jahr NRW:    `/accidents/earliest?ags_prefix=05`
+- Frühestes Jahr MV:     `/accidents/earliest?ags_prefix=13`
+    """,
 )
-def earliest():
-    year = get_earliest_year()
+def earliest(
+    ags_prefix: str | None = Query(
+        default=None,
+        description="AGS-Präfix des Bundeslandes, z.B. '05' für NRW.",
+        examples=["05"]
+    )
+):
+    year = get_earliest_year(ags_prefix)
     if year is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Keine Unfalldaten in der Datenbank vorhanden."
+        detail = (
+            f"Keine Daten für AGS-Präfix '{ags_prefix}'."
+            if ags_prefix
+            else "Keine Unfalldaten in der Datenbank vorhanden."
         )
+        raise HTTPException(status_code=404, detail=detail)
     return EarliestYearResponse(earliest_year=year)
 
 
