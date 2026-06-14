@@ -13,6 +13,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CSV_PATH = BASE_DIR / "genesis" / "bevoelkerung_bundeslaender.csv"
 
 
+# todo: das selbe auch nochmal für bevoelkerung_kreis!!!!!
+
 def load_csv():
 
     df = pd.read_csv(
@@ -189,7 +191,7 @@ def write_import_log(conn, status, log_info, hinweis=None):
         )
         VALUES (%s, NOW(), %s, %s, %s, %s, %s)
     """, (
-        "genesis",
+        "genesis_bl",
         status,
         log_info.get("processed"),
         log_info.get("inserted"),

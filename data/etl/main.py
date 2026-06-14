@@ -1,4 +1,4 @@
-from data.etl import genesis, regionalatlas, unfallatlas, checks
+from data.etl import genesis_bl, regionalatlas, unfallatlas, checks, genesis_kreis
 
 
 def run_step(name, func):
@@ -18,7 +18,8 @@ def main():
 
     run_step("Regionalatlas", regionalatlas.main)
     run_step("Unfallatlas", unfallatlas.main)
-    run_step("GENESIS", genesis.main)
+    run_step("GENESIS Bundesland", genesis_bl.main)
+    run_step("GENESIS Kreis", genesis_kreis.main)
 
     run_step("checks", checks.run_checks)
 
