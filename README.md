@@ -15,6 +15,11 @@ cd dbw_projekt
 - Python 3.12+
 
 ---
+## Datenbeschaffung
+
+- aus regionalatlas, unfallatlas und genesis alle csv's herunterladen, die man will
+- in jeweilige Ordner unter ./data legen (Namensgebung egal, da automatisch eingelesen)
+---
 
 ## Datenbank starten
 
