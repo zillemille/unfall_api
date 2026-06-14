@@ -1,8 +1,5 @@
 """
 Pydantic-Modelle für alle API-Antworten.
-
-Vorteil: FastAPI generiert daraus automatisch das OpenAPI-Schema,
-d.h. Swagger zeigt Feldnamen, Typen und Beispiele korrekt an.
 """
 
 from pydantic import BaseModel, Field

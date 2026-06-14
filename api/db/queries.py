@@ -69,6 +69,47 @@ def get_import_runs() -> list[dict]:
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
+def search_regions(
+    name: str | None = None,
+    level: str | None = None,
+    ags_prefix: str | None = None,
+) -> list[dict]:
+    """
+    Regionen suchen — Brücke zwischen Name und AGS.
+    Unterstützt Teilstring-Suche (ILIKE) für Autocomplete.
+    """
+    with _cursor() as cur:
+        cur.execute("""
+            SELECT
+                region_id,
+                ags,
+                LEFT(ags, 2)  AS ags_prefix,
+                name,
+                level,
+                parent_ags
+            FROM regionen
+            WHERE (%(name)s      IS NULL OR name  ILIKE %(name_pattern)s)
+              AND (%(level)s     IS NULL OR level = %(level)s)
+              AND (%(ags_prefix)s IS NULL OR ags  LIKE %(ags_pattern)s)
+            ORDER BY
+                CASE level
+                    WHEN 'bundesland' THEN 1
+                    WHEN 'kreis'      THEN 2
+                    ELSE 3
+                END,
+                name
+            LIMIT 20
+        """, {
+            "name":         name,
+            "name_pattern": f"%{name}%" if name else None,
+            "level":        level,
+            "ags_prefix":   ags_prefix,
+            "ags_pattern":  f"{ags_prefix}%" if ags_prefix else None,
+        })
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
 # ─── Regions-Abfragen ──────────────────
 
 def get_accident_count(
@@ -121,29 +162,8 @@ def get_available_years(ags_prefix: str) -> list[int]:
         return [row[0] for row in cur.fetchall()]
 
 
-def get_pedestrian_accidents(region_name: str, year: int) -> int:
+def get_pedestrian_accidents(ags_prefix: str, year: int) -> int:
     with _cursor() as cur:
-
-        # Region auflösen
-        cur.execute("""
-            SELECT ags, level
-            FROM regionen
-            WHERE name = %(name)s
-            ORDER BY
-                CASE level
-                    WHEN 'bundesland' THEN 1
-                    WHEN 'kreis'      THEN 2
-                    ELSE 3
-                END
-            LIMIT 1
-        """, {"name": region_name})
-
-        row = cur.fetchone()
-        if not row:
-            return 0
-        ags, level = row
-        ags_prefix = ags[:2] if level == "bundesland" else ags[:5]
-
         cur.execute("""
             SELECT COUNT(*)
             FROM unfaelle u
@@ -152,7 +172,6 @@ def get_pedestrian_accidents(region_name: str, year: int) -> int:
               AND u.jahr     = %(year)s
               AND u.ist_fuss = TRUE
         """, {"prefix": f"{ags_prefix}%", "year": year})
-
         return _fetchone(cur) or 0
 
 
@@ -206,46 +225,9 @@ def get_accident_aggregates(
 
 # ─── Multi-Source-Abfragen ───────────────────────────────────────────────────
 
-def get_per_capita(region_name: str, year: int) -> tuple[float, int] | None:
-    """
-    Unfälle je 100.000 Einwohner.
-
-    Verbindung über AGS statt region_id-Kette:
-      name → ags → unfälle (via LIKE-Präfix)
-      name → ags → bevoelkerung (via regionen-Join, nicht direkter ID-Match)
-    """
+def get_per_capita(ags_prefix: str, year: int) -> tuple[float, int] | None:
     with _cursor() as cur:
 
-        # Schritt 1: Region auflösen — AGS ist die stabile Verbindung
-        cur.execute("""
-            SELECT region_id, ags, level
-            FROM regionen
-            WHERE name = %(name)s
-            ORDER BY
-                -- Bundesland bevorzugen wenn mehrere Treffer (z.B. Stadtstaaten)
-                CASE level
-                    WHEN 'bundesland' THEN 1
-                    WHEN 'kreis'      THEN 2
-                    ELSE 3
-                END
-            LIMIT 1
-        """, {"name": region_name})
-
-        row = cur.fetchone()
-        if not row:
-            return None
-        region_id, ags, level = row
-
-        # AGS-Präfix ableiten: '14000000' → '14', '14522000' → '14522'
-        # Bundesland: erste 2 Stellen, Kreis: erste 5 Stellen
-        if level == "bundesland":
-            ags_prefix = ags[:2]
-        else:
-            ags_prefix = ags[:5]
-
-        # Schritt 2: Bevölkerung über AGS-Präfix suchen
-        # Sucht in allen Regionen die zum AGS-Präfix passen — unabhängig
-        # davon welche region_id der Genesis-Import verwendet hat
         cur.execute("""
             SELECT b.jahr, b.einwohner
             FROM bevoelkerung b
@@ -260,11 +242,6 @@ def get_per_capita(region_name: str, year: int) -> tuple[float, int] | None:
             return None
         bev_jahr, einwohner = bev_row
 
-        # Schritt 3: Unfälle über AGS-Präfix aggregieren
-        # Deckt automatisch ab:
-        #   Bundesland → alle Kreise via LIKE '14%'
-        #   Stadtstaat → bundesland-Eintrag via LIKE '11%'
-        #   Kreis      → nur dieser Kreis via LIKE '14522%'
         cur.execute("""
             SELECT COUNT(u.unfall_id)
             FROM unfaelle u
@@ -274,7 +251,6 @@ def get_per_capita(region_name: str, year: int) -> tuple[float, int] | None:
         """, {"prefix": f"{ags_prefix}%", "year": year})
 
         unfall_count = cur.fetchone()[0]
-
         if einwohner == 0:
             return None
 

@@ -147,29 +147,18 @@ def years(
     return AvailableYearsResponse(ags_prefix=ags_prefix, years=result)
 
 
-@router.get(
-    "/pedestrian",
-    response_model=PedestrianAccidentsResponse,
-    summary="Fußgängerunfälle je Region und Jahr",
-    description=(
-        "Zählt Unfälle mit Fußgängerbeteiligung (`ist_fuss = true`) "
-        "für eine benannte Region. Der Name muss exakt dem Eintrag "
-        "in der Tabelle `regionen` entsprechen."
-    ),
-)
+@router.get("/pedestrian", response_model=PedestrianAccidentsResponse)
 def pedestrian(
-    region: str = Query(
-        description="Exakter Regionsname, z.B. 'Berlin' oder 'Dresden'.",
-        examples=["Berlin"]
+    ags_prefix: str = Query(
+        description="AGS-Präfix der Region. Vorher per /regions suchen.",
+        examples=["11"]
     ),
-    year: int = Query(
-        ge=2000, le=2100,
-        examples=[2023]
-    ),
+    year: int = Query(ge=2000, le=2100, examples=[2024]),
 ):
-    result = get_pedestrian_accidents(region, year)
-    # 0 ist ein valides Ergebnis — keine 404
-    return PedestrianAccidentsResponse(region=region, year=year, count=result)
+    result = get_pedestrian_accidents(ags_prefix, year)
+    return PedestrianAccidentsResponse(
+        region=ags_prefix, year=year, count=result
+    )
 
 
 @router.get(
@@ -204,32 +193,24 @@ def aggregates(
     )
 
 
-@router.get(
-    "/per-capita",
-    response_model=PerCapitaResponse,
-    summary="Unfälle je 100.000 Einwohner",
-    description=(
-        "Kombiniert Unfall- und Bevölkerungsdaten. "
-        "Gibt None zurück wenn für das Jahr keine Bevölkerungszahl hinterlegt ist."
-    ),
-)
+@router.get("/per-capita",
+            response_model=PerCapitaResponse,
+            summary="Unfälle pro 100k Einwohnern",
+            description=("")
+            )
 def per_capita(
-    region: str = Query(description="Exakter Regionsname.", examples=["Sachsen"]),
-    year:   int = Query(ge=2000, le=2100, examples=[2023]),
+    ags_prefix: str = Query(examples=["14"]),
+    year:       int = Query(ge=2000, le=2100, examples=[2023]),
 ):
-    result = get_per_capita(region, year)
-
+    result = get_per_capita(ags_prefix, year)
     if result is None:
         raise HTTPException(
             status_code=404,
-            detail=f"Keine Bevölkerungsdaten für '{region}' im Jahr {year}."
+            detail=f"Keine Bevölkerungsdaten für AGS '{ags_prefix}' im Jahr {year}."
         )
-
     unfaelle_pro_100k, bev_jahr = result
-
     return PerCapitaResponse(
-        region=region,
-        year=year,
+        region=ags_prefix, year=year,
         unfaelle_pro_100k=unfaelle_pro_100k,
         bevoelkerung_jahr=bev_jahr,
     )
@@ -321,11 +302,8 @@ def top(
     "/zero-accidents",
     summary="Regionen ohne Unfälle",
     description="""
-Gibt alle Gemeinden (oder Kreise) zurück, für die im angegebenen Jahr
+Gibt alle Kreise zurück, für die im angegebenen Jahr
 **kein einziger Unfall** erfasst wurde.
-
-Erfordert vollständige Regionsreferenz via `LEFT JOIN` auf `regionen` —
-ein einfaches Filtern der Unfalltabelle würde diese Fälle nie liefern.
     """,
 )
 def zero_accidents(
@@ -334,7 +312,7 @@ def zero_accidents(
         description="Bundesland eingrenzen, z.B. '14' für Sachsen.",
         examples=["14"]
     ),
-    level: str = Query(default="gemeinde"),
+    level: str = Query(default="kreis"),
 ):
     if level == "bundesland":
         raise HTTPException(
