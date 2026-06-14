@@ -1,4 +1,5 @@
 services:
+
   db:
     image: postgis/postgis:15-3.4
     environment:
@@ -10,6 +11,53 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbw_user -d dbw_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  etl:
+    build: .
+    command: python -m data.etl.main
+    environment:
+      - DB_HOST=db          # ← im Docker-Netzwerk, nicht localhost
+      - DB_PORT=5432
+      - DB_NAME=dbw_db
+      - DB_USER=dbw_user
+      - DB_PASS=dbw_pass
+    volumes:
+      - ./data:/app/data    # ← CSV-Dateien werden gemountet, nicht ins Image kopiert
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=dbw_db
+      - DB_USER=dbw_user
+      - DB_PASS=dbw_pass
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
 
 volumes:
   postgres_data:

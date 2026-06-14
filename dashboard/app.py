@@ -45,11 +45,10 @@ def show_result(data, error):
 
 st.set_page_config(
     page_title="Unfallatlas Dashboard",
-    page_icon="🚦",
     layout="centered",
 )
 
-st.title("🚦 Unfallatlas Dashboard")
+st.title("Unfallatlas Dashboard")
 st.caption(f"API: `{API_URL}`")
 st.divider()
 
@@ -70,7 +69,6 @@ with st.expander("Wie viele Unfälle mit Personenschäden ereigneten sich 2023 i
         data, error = api_get("/accidents/count", params={
             "ags_prefix": "14",
             "year": 2023,
-            "kategorien": [1, 2, 3],
         })
         show_result(data, error)
 

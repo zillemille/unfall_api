@@ -1,10 +1,13 @@
+
+import os
+
 # Datenbankkennungen
 DB_CONFIG = {
-    "host": "localhost",
-    "port": 5432,
-    "user": "dbw_user",
-    "password": "dbw_pass",
-    "dbname": "dbw_db"
+    "host":     os.getenv("DB_HOST", "localhost"),
+    "port":     int(os.getenv("DB_PORT", "5432")),
+    "user":     os.getenv("DB_USER", "dbw_user"),
+    "password": os.getenv("DB_PASS", "dbw_pass"),
+    "dbname":   os.getenv("DB_NAME", "dbw_db"),
 }
 
 
