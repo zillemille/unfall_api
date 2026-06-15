@@ -5,3 +5,4 @@ __pycache__
 .env
 data/unfallatlas/*.csv
 data/regionalatlas/*.geojson
+data/genesis/*.csv

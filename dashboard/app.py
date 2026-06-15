@@ -175,3 +175,23 @@ with st.expander("(Bonus) Kreise ohne Unfälle in einem Jahr"):
             "level": "kreis",
         })
         show_result(data, error)
+
+
+# ──────── nützliche Abfragen ────────────────────────────
+
+st.header("nützliche Abfragen")
+
+with st.expander("Ags zu Regionennamen bekommen"):
+    region_name = st.text_input("Regionennamen", key="region_name")
+    level = st.text_input("Level", key="level")
+    ags_pre = st.text_input("AGS-Präfix", key="ags_pre")
+    params = {}
+    if region_name:
+        params.update({"name": region_name})
+    if level:
+        params.update({"level": level})
+    if ags_pre:
+        params.update({"ags_prefix": ags_pre})
+    if st.button("Abfragen", key="ags_search"):
+        data, error = api_get("/regions/", params= params)
+        show_result(data, error)
