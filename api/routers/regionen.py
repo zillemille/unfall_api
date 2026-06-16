@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 
-from api.db.queries import get_per_capita, search_regions
+from api.db.queries import get_per_capita, search_regions, get_license_note
 
 router = APIRouter(prefix="/regions", tags=["Regionen"])
 
@@ -13,7 +13,8 @@ def per_capita(region: str, year: int):
         "accidents_per_100k": get_per_capita(
             region,
             year
-        )
+        ),
+        "_lizenzen": get_license_note("regionalatlas", "unfallatlas", "genesis")
     }
 
 
@@ -35,4 +36,7 @@ def regions(
     level:      str | None = Query(default=None, description="'bundesland' oder 'kreis'"),
     ags_prefix: str | None = Query(default=None, description="AGS-Präfix, z.B. '14'"),
 ):
-    return {"regions": search_regions(name, level, ags_prefix)}
+    return {
+        "regions": search_regions(name, level, ags_prefix),
+        "_lizenzen": get_license_note("regionalatlas")
+    }

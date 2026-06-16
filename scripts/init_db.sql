@@ -77,3 +77,27 @@ CREATE TABLE IF NOT EXISTS lizenzen (
     lizenz_url    TEXT,
     abgerufen_am  DATE
 );
+
+-- scripts/init_db.sql — am Ende ergänzen
+
+INSERT INTO lizenzen (quelle, lizenz_name, lizenz_url, abgerufen_am)
+VALUES
+(
+    'Unfallatlas – Statistische Ämter des Bundes und der Länder',
+    'Datenlizenz Deutschland – Namensnennung – Version 2.0',
+    'https://www.govdata.de/dl-de/by-2-0',
+    '2025-01-01'
+),
+(
+    'Regionalatlas – Bundesamt für Kartographie und Geodäsie (BKG)',
+    'Datenlizenz Deutschland – Namensnennung – Version 2.0',
+    'https://www.govdata.de/dl-de/by-2-0',
+    '2025-01-01'
+),
+(
+    'Genesis-Online – Statistisches Bundesamt (Destatis)',
+    'Datenlizenz Deutschland – Namensnennung – Version 2.0',
+    'https://www.govdata.de/dl-de/by-2-0',
+    '2025-01-01'
+)
+ON CONFLICT (quelle) DO NOTHING;

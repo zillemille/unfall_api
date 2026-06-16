@@ -3,17 +3,31 @@
 from contextlib import contextmanager
 from api.db.database import get_connection
 
+import psycopg2
+from fastapi import HTTPException
+
 
 # ─── Hilfsmittel ────────────────────────────────────────────────────────────
 
 @contextmanager
 def _cursor():
-    """Context Manager: gibt einen Cursor zurück, schließt Connection sicher."""
     conn = get_connection()
     try:
         cur = conn.cursor()
         yield cur
         conn.commit()
+    except psycopg2.OperationalError as e:
+        # DB nicht erreichbar
+        raise HTTPException(
+            status_code=503,
+            detail="Datenbankverbindung nicht verfügbar."
+        )
+    except psycopg2.Error as e:
+        # Query-Fehler
+        raise HTTPException(
+            status_code=500,
+            detail=f"Datenbankfehler: {e.pgcode}"
+        )
     finally:
         conn.close()
 
@@ -21,6 +35,26 @@ def _cursor():
 def _fetchone(cur) -> any:
     row = cur.fetchone()
     return row[0] if row else None
+
+
+LIZENZ_BASIS = {
+    "lizenz":     "Datenlizenz Deutschland – Namensnennung – Version 2.0",
+    "lizenz_id":  "dl-de/by-2-0",
+    "lizenz_url": "https://www.govdata.de/dl-de/by-2-0",
+    "hinweis":    "Daten wurden zusammengeführt und verändert.",
+}
+
+QUELLEN = {
+    "unfallatlas":   "Statistische Ämter des Bundes und der Länder – Unfallatlas",
+    "regionalatlas": "Bundesamt für Kartographie und Geodäsie – Regionalatlas",
+    "genesis":       "Statistisches Bundesamt (Destatis) – Genesis-Online",
+}
+
+def get_license_note(*quellen_keys: str) -> dict:
+    return {
+        **LIZENZ_BASIS,
+        "quellen": [QUELLEN[k] for k in quellen_keys],
+    }
 
 
 # ─── Einfache Abfragen ───────────────────────────────────────────────────────

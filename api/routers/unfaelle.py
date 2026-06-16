@@ -2,8 +2,7 @@
 Router: /accidents
 
 Endpunkte für Unfallstatistiken auf Basis des Unfallatlas-Datensatzes.
-Alle Gebietsangaben erfolgen über AGS-Präfixe (Amtlicher Gemeindeschlüssel)
-oder Regionsnamen aus der Tabelle `regionen`.
+Alle Gebietsangaben erfolgen über AGS-Präfixe (Amtlicher Gemeindeschlüssel).
 
 AGS-Präfixe wichtiger Bundesländer:
     05 = Nordrhein-Westfalen
@@ -13,6 +12,7 @@ AGS-Präfixe wichtiger Bundesländer:
 """
 
 from fastapi import APIRouter, HTTPException, Query
+import re
 
 from api.db.queries import (
     get_earliest_year,
@@ -25,6 +25,7 @@ from api.db.queries import (
     get_trend,
     get_top_regions,
     get_zero_accident_regions,
+    get_license_note,
 )
 
 from api.models.response import (
@@ -40,7 +41,7 @@ from api.models.response import (
 
 router = APIRouter(prefix="/accidents", tags=["Unfälle"])
 
-_VALID_LEVELS = {"bundesland", "kreis", "gemeinde"}
+_VALID_LEVELS = {"bundesland", "kreis"}
 
 
 # ─── Hilfsfunktion ───────────────────────────────────────────────────────────
@@ -52,12 +53,20 @@ def _require_level(level: str) -> None:
             detail=f"Ungültiger Level '{level}'. Erlaubt: {sorted(_VALID_LEVELS)}"
         )
 
+def _validate_ags(ags_prefix: str) -> str:
+    if not re.match(r"^\d{2,8}$", ags_prefix):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Ungültiges AGS-Format '{ags_prefix}'. "
+                   f"Erwartet: 2–8 Ziffern, z.B. '05' oder '14522'."
+        )
+    return ags_prefix
+
 
 # ─── Endpunkte ───────────────────────────────────────────────────────────────
 
 @router.get(
     "/earliest",
-    response_model=EarliestYearResponse,
     summary="Frühestes Datenjahr",
     description="""
 Gibt das früheste Jahr zurück, für das Unfalldaten vorliegen.
@@ -78,20 +87,25 @@ def earliest(
         examples=["05"]
     )
 ):
+    _validate_ags(ags_prefix)
     year = get_earliest_year(ags_prefix)
     if year is None:
-        detail = (
-            f"Keine Daten für AGS-Präfix '{ags_prefix}'."
-            if ags_prefix
-            else "Keine Unfalldaten in der Datenbank vorhanden."
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Keine Daten für AGS-Präfix '{ags_prefix}'."
+                if ags_prefix
+                else "Keine Unfalldaten in der Datenbank vorhanden."
+            )
         )
-        raise HTTPException(status_code=404, detail=detail)
-    return EarliestYearResponse(earliest_year=year)
+    return {
+        "earliest_year": year,
+        "_lizenz": get_license_note("unfallatlas", "regionalatlas"),
+    }
 
 
 @router.get(
     "/count",
-    response_model=AccidentCountResponse,
     summary="Unfallanzahl mit allen Filtern",
     description="""
 Zählt Unfälle für eine Region mit optionalen Filtern.
@@ -105,49 +119,60 @@ Zählt Unfälle für eine Region mit optionalen Filtern.
     """,
 )
 def count(
-    ags_prefix: str  = Query(examples=["14"]),
-    year:       int  = Query(ge=2000, le=2100),
-    kategorien: list[int] | None = Query(default=None, ge=1, le=3),
-    monat:      int  | None = Query(default=None, ge=1, le=12),
-    stunde:     int  | None = Query(default=None, ge=0, le=23),
-    ist_rad:      bool | None = Query(default=None),
-    ist_fuss:     bool | None = Query(default=None),
-    ist_pkw:      bool | None = Query(default=None),
-    ist_kraftrad: bool | None = Query(default=None),
+    ags_prefix:   str            = Query(examples=["14"]),
+    year:         int            = Query(ge=2000, le=2100),
+    kategorien:   list[int] | None = Query(default=None, ge=1, le=3),
+    monat:        int | None     = Query(default=None, ge=1, le=12),
+    stunde:       int | None     = Query(default=None, ge=0, le=23),
+    ist_rad:      bool | None    = Query(default=None),
+    ist_fuss:     bool | None    = Query(default=None),
+    ist_pkw:      bool | None    = Query(default=None),
+    ist_kraftrad: bool | None    = Query(default=None),
 ):
+    _validate_ags(ags_prefix)
     result = get_accident_count(
         ags_prefix, year, kategorien, monat, stunde,
         ist_rad, ist_fuss, ist_pkw, ist_kraftrad
     )
-    return AccidentCountResponse(
-        region=ags_prefix, year=year,
-        kategorie=kategorien, count=result
-    )
+    return {
+        "region":     ags_prefix,
+        "year":       year,
+        "kategorie":  kategorien,
+        "count":      result,
+        "_lizenz":    get_license_note("unfallatlas", "regionalatlas"),
+    }
 
 
 @router.get(
     "/years",
-    response_model=AvailableYearsResponse,
-    summary="Verfügbare Datenjahre je Bundesland",
+    summary="Verfügbare Datenjahre je Region",
     description="Gibt alle Jahre zurück, für die in einer Region mindestens ein Unfall erfasst ist.",
 )
 def years(
     ags_prefix: str = Query(
-        description="AGS-Präfix, z.B. '05' für NRW oder '13' für Mecklenburg-Vorpommern.",
+        description="AGS-Präfix, z.B. '05' für NRW oder '13' für MV.",
         examples=["05"]
     )
 ):
+    _validate_ags(ags_prefix)
     result = get_available_years(ags_prefix)
     if not result:
         raise HTTPException(
             status_code=404,
-            detail=f"Keine Daten für AGS-Präfix '{ags_prefix}' gefunden. "
-                   f"Bitte AGS-Präfix prüfen (z.B. '14' für Sachsen)."
+            detail=f"Keine Daten für AGS-Präfix '{ags_prefix}' gefunden."
         )
-    return AvailableYearsResponse(ags_prefix=ags_prefix, years=result)
+    return {
+        "ags_prefix": ags_prefix,
+        "years":      result,
+        "_lizenz":    get_license_note("unfallatlas", "regionalatlas"),
+    }
 
 
-@router.get("/pedestrian", response_model=PedestrianAccidentsResponse)
+@router.get(
+    "/pedestrian",
+    summary="Fußgängerunfälle je Region und Jahr",
+    description="Zählt Unfälle mit Fußgängerbeteiligung (`ist_fuss = true`) für eine Region.",
+)
 def pedestrian(
     ags_prefix: str = Query(
         description="AGS-Präfix der Region. Vorher per /regions suchen.",
@@ -155,25 +180,27 @@ def pedestrian(
     ),
     year: int = Query(ge=2000, le=2100, examples=[2024]),
 ):
+    _validate_ags(ags_prefix)
     result = get_pedestrian_accidents(ags_prefix, year)
-    return PedestrianAccidentsResponse(
-        region=ags_prefix, year=year, count=result
-    )
+    return {
+        "region":  ags_prefix,
+        "year":    year,
+        "count":   result,
+        "_lizenz": get_license_note("unfallatlas", "regionalatlas"),
+    }
 
 
 @router.get(
     "/aggregates",
-    response_model=AggregatesResponse,
     summary="Unfälle aggregiert nach Regionslevel",
     description=(
         "Gibt Unfallzahlen gruppiert nach Regionslevel zurück, "
-        "absteigend sortiert. "
-        "Levels: `bundesland`, `kreis`."
+        "absteigend sortiert. Levels: `bundesland`, `kreis`."
     ),
 )
 def aggregates(
     level: str = Query(
-        description="Aggregationsebene: 'bundesland', 'kreis' oder 'gemeinde'.",
+        description="Aggregationsebene: 'bundesland' oder 'kreis'.",
         examples=["kreis"]
     ),
     year: int = Query(ge=2000, le=2100, examples=[2023]),
@@ -185,23 +212,29 @@ def aggregates(
 ):
     _require_level(level)
     rows = get_accident_aggregates(level, year, kategorie)
-    return AggregatesResponse(
-        level=level,
-        year=year,
-        kategorie=kategorie,
-        data=[RegionAggregate(**row) for row in rows],
-    )
+    return {
+        "level":     level,
+        "year":      year,
+        "kategorie": kategorie,
+        "data":      rows,
+        "_lizenz":   get_license_note("unfallatlas", "regionalatlas"),
+    }
 
 
-@router.get("/per-capita",
-            response_model=PerCapitaResponse,
-            summary="Unfälle pro 100k Einwohnern",
-            description=("")
-            )
+@router.get(
+    "/per-capita",
+    summary="Unfälle je 100.000 Einwohner",
+    description=(
+        "Kombiniert Unfall- und Bevölkerungsdaten. "
+        "Das verwendete Bevölkerungsjahr kann vom Abfragejahr abweichen, "
+        "wenn keine exakten Daten vorliegen."
+    ),
+)
 def per_capita(
     ags_prefix: str = Query(examples=["14"]),
     year:       int = Query(ge=2000, le=2100, examples=[2023]),
 ):
+    _validate_ags(ags_prefix)
     result = get_per_capita(ags_prefix, year)
     if result is None:
         raise HTTPException(
@@ -209,16 +242,17 @@ def per_capita(
             detail=f"Keine Bevölkerungsdaten für AGS '{ags_prefix}' im Jahr {year}."
         )
     unfaelle_pro_100k, bev_jahr = result
-    return PerCapitaResponse(
-        region=ags_prefix, year=year,
-        unfaelle_pro_100k=unfaelle_pro_100k,
-        bevoelkerung_jahr=bev_jahr,
-    )
+    return {
+        "region":             ags_prefix,
+        "year":               year,
+        "unfaelle_pro_100k":  unfaelle_pro_100k,
+        "bevoelkerung_jahr":  bev_jahr,
+        "_lizenz":            get_license_note("unfallatlas", "regionalatlas", "genesis"),
+    }
 
 
 @router.get(
     "/density",
-    response_model=AccidentDensityResponse,
     summary="Unfälle je km² (räumliche Dichte)",
     description=(
         "Berechnet die Unfalldichte pro Quadratkilometer auf Basis "
@@ -233,8 +267,7 @@ def density(
     if level not in ("bundesland", "kreis"):
         raise HTTPException(
             status_code=422,
-            detail=f"Level '{level}' für Dichte-Abfrage nicht unterstützt. "
-                   f"Erlaubt: 'bundesland', 'kreis'."
+            detail=f"Level '{level}' nicht unterstützt. Erlaubt: 'bundesland', 'kreis'."
         )
     rows = get_accident_density(year, level)
     if not rows:
@@ -242,12 +275,18 @@ def density(
             status_code=404,
             detail=f"Keine Daten für Jahr {year} auf Level '{level}'."
         )
-    return AccidentDensityResponse(level=level, year=year, data=rows)
+    return {
+        "level":   level,
+        "year":    year,
+        "data":    rows,
+        "_lizenz": get_license_note("unfallatlas", "regionalatlas"),
+    }
+
 
 @router.get(
     "/trend",
     summary="Jahrestrend für eine Region",
-    description="Unfallzahlen pro Jahr inkl. Veränderung zum Vorjahr.",
+    description="Unfallzahlen pro Jahr inkl. Veränderung zum Vorjahr (via SQL LAG).",
 )
 def trend(
     ags_prefix: str = Query(examples=["14"]),
@@ -255,6 +294,7 @@ def trend(
     bis_jahr:   int = Query(ge=2000, le=2100, examples=[2023]),
     kategorie:  int | None = Query(default=None, ge=1, le=3),
 ):
+    _validate_ags(ags_prefix)
     if von_jahr > bis_jahr:
         raise HTTPException(
             status_code=422,
@@ -266,7 +306,11 @@ def trend(
             status_code=404,
             detail=f"Keine Daten für AGS '{ags_prefix}' zwischen {von_jahr} und {bis_jahr}."
         )
-    return {"ags_prefix": ags_prefix, "trend": rows}
+    return {
+        "ags_prefix": ags_prefix,
+        "trend":      rows,
+        "_lizenz":    get_license_note("unfallatlas", "regionalatlas"),
+    }
 
 
 @router.get(
@@ -275,19 +319,20 @@ def trend(
     description="""
 Rangliste der unfallreichsten Regionen.
 
-Beispielaufruf für *„5 schlimmste Landkreise mit Todesunfällen 2024"*:
+Beispiel für *„5 schlimmste Landkreise mit Todesunfällen 2024"*:
 `/accidents/top?level=kreis&year=2024&kategorie=1&limit=5`
 
 Mit `ags_prefix=14` wird die Suche auf Sachsen eingeschränkt.
     """,
 )
 def top(
-    level:      str = Query(examples=["kreis"]),
-    year:       int = Query(ge=2000, le=2100),
-    kategorie:  int | None = Query(default=None, ge=1, le=3),
-    limit:      int = Query(default=5, ge=1, le=100),
-    ags_prefix: str | None = Query(default=None, examples=["14"]),
+    level:      str            = Query(examples=["kreis"]),
+    year:       int            = Query(ge=2000, le=2100),
+    kategorie:  int | None     = Query(default=None, ge=1, le=3),
+    limit:      int            = Query(default=5, ge=1, le=100),
+    ags_prefix: str | None     = Query(default=None, examples=["14"]),
 ):
+    _validate_ags(ags_prefix)
     _require_level(level)
     rows = get_top_regions(level, year, kategorie, limit, ags_prefix)
     if not rows:
@@ -295,7 +340,12 @@ def top(
             status_code=404,
             detail=f"Keine Daten für Level '{level}', Jahr {year}."
         )
-    return {"level": level, "year": year, "ranking": rows}
+    return {
+        "level":   level,
+        "year":    year,
+        "ranking": rows,
+        "_lizenz": get_license_note("unfallatlas", "regionalatlas"),
+    }
 
 
 @router.get(
@@ -314,10 +364,11 @@ def zero_accidents(
     ),
     level: str = Query(default="kreis"),
 ):
+    _validate_ags(ags_prefix)
     if level == "bundesland":
         raise HTTPException(
             status_code=422,
-            detail="level=bundesland nicht unterstützt. Verwende 'kreis."
+            detail="level='bundesland' nicht unterstützt. Verwende 'kreis'."
         )
     _require_level(level)
     rows = get_zero_accident_regions(year, ags_prefix, level)
@@ -327,4 +378,5 @@ def zero_accidents(
         "level":      level,
         "count":      len(rows),
         "regions":    rows,
+        "_lizenz":    get_license_note("unfallatlas", "regionalatlas"),
     }
