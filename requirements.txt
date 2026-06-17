@@ -10,3 +10,4 @@ shapely
 pyproj
 pydantic
 streamlit
+sqlalchemy

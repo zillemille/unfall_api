@@ -1,21 +1,8 @@
 from fastapi import APIRouter, Query
 
-from api.db.queries import get_per_capita, search_regions, get_license_note
+from api.db.queries import get_per_capita, search_regions, get_license_note, validate_ags, get_map_region
 
 router = APIRouter(prefix="/regions", tags=["Regionen"])
-
-
-@router.get("/per-capita")
-def per_capita(region: str, year: int):
-    return {
-        "region": region,
-        "year": year,
-        "accidents_per_100k": get_per_capita(
-            region,
-            year
-        ),
-        "_lizenzen": get_license_note("regionalatlas", "unfallatlas", "genesis")
-    }
 
 
 @router.get(
@@ -25,7 +12,7 @@ def per_capita(region: str, year: int):
 Sucht Regionen per Name (Teilstring) oder AGS-Präfix.
 Gibt AGS zurück, der für alle anderen Endpunkte verwendet werden kann.
 
-**Typischer Client-Flow:**
+**Beispielhafter Client-Flow:**
 1. Nutzer gibt "Sachsen" ein → dieser Endpunkt
 2. Client erhält `ags_prefix = "14"`
 3. Client nutzt `14` für `/accidents/count`, `/accidents/trend` etc.
@@ -38,5 +25,21 @@ def regions(
 ):
     return {
         "regions": search_regions(name, level, ags_prefix),
+        "_lizenzen": get_license_note("regionalatlas")
+    }
+
+@router.get(
+    "/map_region",
+    summary="Karte einer Region",
+    description="""
+    Gibt die Karte einer Region per AGS_Präfix zurück.
+    """
+)
+def map_region(
+        ags_prefix: str,
+):
+    validate_ags(ags_prefix)
+    return {
+        "map": get_map_region(ags_prefix),
         "_lizenzen": get_license_note("regionalatlas")
     }

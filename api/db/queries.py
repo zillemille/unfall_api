@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 from api.db.database import get_connection
+import re
 
 import psycopg2
 from fastapi import HTTPException
@@ -55,6 +56,16 @@ def get_license_note(*quellen_keys: str) -> dict:
         **LIZENZ_BASIS,
         "quellen": [QUELLEN[k] for k in quellen_keys],
     }
+
+
+def validate_ags(ags_prefix: str) -> str:
+    if not re.match(r"^\d{2,8}$", ags_prefix):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Ungültiges AGS-Format '{ags_prefix}'. "
+                   f"Erwartet: 2–8 Ziffern, z.B. '05' oder '14522'."
+        )
+    return ags_prefix
 
 
 # ─── Einfache Abfragen ───────────────────────────────────────────────────────
@@ -458,5 +469,20 @@ def get_zero_accident_regions(
               AND u.unfall_id IS NULL
             ORDER BY r.name
         """, {"year": year, "level": level, "prefix": f"{ags_prefix}%"})
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def get_map_region(
+        ags_prefix: str
+) -> list[dict]:
+    with _cursor() as cur:
+        cur.execute("""
+            SELECT ST_AsGeoJSON(geometrie) AS geojson,
+                   name
+            FROM regionen
+            WHERE ags LIKE %(ags)s
+            ORDER BY name
+            """, {"ags": f"{ags_prefix}%"})
         cols = [d.name for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]

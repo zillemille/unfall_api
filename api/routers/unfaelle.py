@@ -26,6 +26,7 @@ from api.db.queries import (
     get_top_regions,
     get_zero_accident_regions,
     get_license_note,
+    validate_ags
 )
 
 from api.models.response import (
@@ -52,15 +53,6 @@ def _require_level(level: str) -> None:
             status_code=422,
             detail=f"Ungültiger Level '{level}'. Erlaubt: {sorted(_VALID_LEVELS)}"
         )
-
-def _validate_ags(ags_prefix: str) -> str:
-    if not re.match(r"^\d{2,8}$", ags_prefix):
-        raise HTTPException(
-            status_code=422,
-            detail=f"Ungültiges AGS-Format '{ags_prefix}'. "
-                   f"Erwartet: 2–8 Ziffern, z.B. '05' oder '14522'."
-        )
-    return ags_prefix
 
 
 # ─── Endpunkte ───────────────────────────────────────────────────────────────
@@ -129,7 +121,7 @@ def count(
     ist_pkw:      bool | None    = Query(default=None),
     ist_kraftrad: bool | None    = Query(default=None),
 ):
-    _validate_ags(ags_prefix)
+    validate_ags(ags_prefix)
     result = get_accident_count(
         ags_prefix, year, kategorien, monat, stunde,
         ist_rad, ist_fuss, ist_pkw, ist_kraftrad
@@ -154,7 +146,7 @@ def years(
         examples=["05"]
     )
 ):
-    _validate_ags(ags_prefix)
+    validate_ags(ags_prefix)
     result = get_available_years(ags_prefix)
     if not result:
         raise HTTPException(
@@ -180,7 +172,7 @@ def pedestrian(
     ),
     year: int = Query(ge=2000, le=2100, examples=[2024]),
 ):
-    _validate_ags(ags_prefix)
+    validate_ags(ags_prefix)
     result = get_pedestrian_accidents(ags_prefix, year)
     return {
         "region":  ags_prefix,
@@ -234,7 +226,7 @@ def per_capita(
     ags_prefix: str = Query(examples=["14"]),
     year:       int = Query(ge=2000, le=2100, examples=[2023]),
 ):
-    _validate_ags(ags_prefix)
+    validate_ags(ags_prefix)
     result = get_per_capita(ags_prefix, year)
     if result is None:
         raise HTTPException(
@@ -294,7 +286,7 @@ def trend(
     bis_jahr:   int = Query(ge=2000, le=2100, examples=[2023]),
     kategorie:  int | None = Query(default=None, ge=1, le=3),
 ):
-    _validate_ags(ags_prefix)
+    validate_ags(ags_prefix)
     if von_jahr > bis_jahr:
         raise HTTPException(
             status_code=422,
@@ -332,7 +324,7 @@ def top(
     limit:      int            = Query(default=5, ge=1, le=100),
     ags_prefix: str | None     = Query(default=None, examples=["14"]),
 ):
-    _validate_ags(ags_prefix)
+    validate_ags(ags_prefix)
     _require_level(level)
     rows = get_top_regions(level, year, kategorie, limit, ags_prefix)
     if not rows:
@@ -364,7 +356,7 @@ def zero_accidents(
     ),
     level: str = Query(default="kreis"),
 ):
-    _validate_ags(ags_prefix)
+    validate_ags(ags_prefix)
     if level == "bundesland":
         raise HTTPException(
             status_code=422,

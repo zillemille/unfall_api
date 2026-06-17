@@ -78,8 +78,6 @@ CREATE TABLE IF NOT EXISTS lizenzen (
     abgerufen_am  DATE
 );
 
--- scripts/init_db.sql — am Ende ergänzen
-
 INSERT INTO lizenzen (quelle, lizenz_name, lizenz_url, abgerufen_am)
 VALUES
 (
