@@ -2,263 +2,204 @@ import geopandas as gpd
 import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
-
 from pathlib import Path
 
 from data.const.constants import DB_CONFIG
 from data.const.constants import BUNDESLÄNDER_AGS
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR    = Path(__file__).resolve().parent.parent
+GEOJSON_PATH = BASE_DIR / "regionalatlas" / "regionalatlas.geojson"
 
-GEOJSON_PATH = (
-    BASE_DIR / "regionalatlas" / "regionalatlas.geojson"
-)
+DATEINAME = GEOJSON_PATH.name   # "regionalatlas.geojson"
+QUELLE    = "regionalatlas"
 
 
-def load_geojson():
+# ─── Bereits importiert? ─────────────────────────────────────────────────────
 
+def already_imported(conn) -> bool:
+    """
+    Prüft ob diese Datei bereits erfolgreich importiert wurde.
+    Verhindert doppelten Import bei erneutem ETL-Lauf.
+    """
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT 1 FROM import_log
+        WHERE quelle = %s
+          AND status = 'success'
+          AND hinweis = %s
+        LIMIT 1
+    """, (QUELLE, DATEINAME))
+    return cursor.fetchone() is not None
+
+
+# ─── Laden ───────────────────────────────────────────────────────────────────
+
+def load_geojson() -> gpd.GeoDataFrame:
+    if not GEOJSON_PATH.exists():
+        raise FileNotFoundError(
+            f"GeoJSON nicht gefunden: {GEOJSON_PATH}\n"
+            f"Bitte Datei unter data/regionalatlas/ ablegen."
+        )
+    print(f"  Lade {DATEINAME}...")
     gdf = gpd.read_file(GEOJSON_PATH)
-
+    print(f"  {len(gdf)} Features geladen")
     return gdf
 
 
-def transform_data(gdf):
+# ─── Transformieren ──────────────────────────────────────────────────────────
 
+def normalize_ags(ags: str) -> str | None:
+    ags = str(ags)
+    if len(ags) == 2:
+        return ags + "000000"
+    if len(ags) == 5:
+        return ags + "000"
+    return None
+
+
+def transform_data(gdf: gpd.GeoDataFrame) -> pd.DataFrame:
     gdf = gdf.to_crs(4326)
-
-    gdf = gdf[[
-        "schluessel",
-        "gen",
-        "geometry"
-    ]]
-
-    gdf = gdf.rename(columns={
+    gdf = gdf[["schluessel", "gen", "geometry"]].rename(columns={
         "schluessel": "ags",
-        "gen": "name",
-        "geometry": "geometrie"
+        "gen":        "name",
+        "geometry":   "geometrie",
     })
-
     gdf.set_geometry("geometrie", inplace=True)
 
-    # -----------------------------
-    # LANDKREISE
-    # -----------------------------
-
+    # Kreise
     landkreise = gdf.copy()
+    landkreise["ags"]        = landkreise["ags"].astype(str).apply(normalize_ags)
+    landkreise["level"]      = "kreis"
+    landkreise["parent_ags"] = landkreise["ags"].str[:2] + "000000"
 
-    landkreise["ags"] = (
-        landkreise["ags"]
-        .astype(str)
-        .apply(normalize_ags)
-    )
-
-    landkreise["level"] = "kreis"
-
-    landkreise["parent_ags"] = (
-        landkreise["ags"].str[:2]
-        + "000000"
-    )
-
-    # -----------------------------
-    # BUNDESLÄNDER
-    # -----------------------------
-
+    # Bundesländer — durch dissolve aus Kreisen aggregiert
     bundeslaender = landkreise.copy()
-
     bundeslaender["bundesland_ags"] = bundeslaender["ags"].str[:2] + "000000"
-    bundeslaender = bundeslaender.dissolve(
-        by="bundesland_ags",
-        as_index=False
-    )
-
-    bundeslaender["ags"] = bundeslaender["bundesland_ags"]
-    bundeslaender["name"] = bundeslaender["ags"].map(BUNDESLÄNDER_AGS)
-    bundeslaender["level"] = "bundesland"
+    bundeslaender = bundeslaender.dissolve(by="bundesland_ags", as_index=False)
+    bundeslaender["ags"]        = bundeslaender["bundesland_ags"]
+    bundeslaender["name"]       = bundeslaender["ags"].map(BUNDESLÄNDER_AGS)
+    bundeslaender["level"]      = "bundesland"
     bundeslaender["parent_ags"] = None
+    bundeslaender = bundeslaender[["ags", "name", "level", "parent_ags", "geometrie"]]
 
-
-    bundeslaender = bundeslaender[[
-        "ags",
-        "name",
-        "level",
-        "parent_ags",
-        "geometrie"
-    ]]
-
-
-    # -----------------------------
-    # KOMBINIEREN
-    # -----------------------------
-
+    # Stadtstaaten: als Bundesland UND als Kreis eintragen
     stadtstaaten_ags = ["02000000", "11000000", "04000000"]
-
-    landkreise = landkreise[~landkreise["ags"].isin(stadtstaaten_ags)]  # bleibt
+    landkreise = landkreise[~landkreise["ags"].isin(stadtstaaten_ags)]
 
     stadtstaaten_als_kreis = bundeslaender[
         bundeslaender["ags"].isin(stadtstaaten_ags)
     ].copy()
     stadtstaaten_als_kreis["level"] = "kreis"
 
-    gdf_final = pd.concat([
-        landkreise,
-        bundeslaender,
-        stadtstaaten_als_kreis,  # ← neu
-    ], ignore_index=True)
-
-    gdf_final["geometrie_wkt"] = (
-        gdf_final["geometrie"]
-        .to_wkt()
+    gdf_final = pd.concat(
+        [landkreise, bundeslaender, stadtstaaten_als_kreis],
+        ignore_index=True
     )
 
+    gdf_final["geometrie_wkt"] = gdf_final["geometrie"].to_wkt()
+    gdf_final = gdf_final.dropna(subset=["ags", "name"])
 
-    gdf_final = gdf_final.dropna(subset=["ags"])
+    print(f"  {len(gdf_final)} Regionen transformiert "
+          f"({len(landkreise)} Kreise, "
+          f"{len(bundeslaender)} Bundesländer, "
+          f"{len(stadtstaaten_als_kreis)} Stadtstaaten als Kreis)")
 
     return gdf_final
 
 
-def normalize_ags(ags):
+# ─── Einfügen ────────────────────────────────────────────────────────────────
 
-    ags = str(ags)
-
-    if len(ags) == 2:
-        return ags + "000000"
-
-    if len(ags) == 5:
-        return ags + "000"
-
-    return None
-
-
-def create_connection():
-
-    conn = psycopg2.connect(**DB_CONFIG)
-
-    return conn
-
-
-
-def insert_data(conn, gdf):
-
+def insert_data(conn, gdf: pd.DataFrame) -> dict:
     cursor = conn.cursor()
 
-    values = []
-    for _, row in gdf.iterrows():
-        values.append((
-            row["ags"],
-            row["name"],
-            row["level"],
-            row["parent_ags"],
-            row["geometrie_wkt"]
-        ))
+    values = [
+        (row["ags"], row["name"], row["level"], row["parent_ags"], row["geometrie_wkt"])
+        for _, row in gdf.iterrows()
+    ]
 
-    # insert_data — query anpassen:
     query = """
-            INSERT INTO regionen (ags, name, level, parent_ags, geometrie)
-            VALUES %s
-            ON CONFLICT (ags, level) DO NOTHING    
-            RETURNING region_id;
-            """
+        INSERT INTO regionen (ags, name, level, parent_ags, geometrie)
+        VALUES %s
+        ON CONFLICT (ags, level) DO NOTHING
+        RETURNING region_id;
+    """
 
     template = """
     (
-        %s,
-        %s,
-        %s,
-        %s,
-        ST_Multi(
-            ST_GeomFromText(%s, 4326)
-        )
+        %s, %s, %s, %s,
+        ST_Multi(ST_GeomFromText(%s, 4326))
     )
     """
 
-    inserted_rows = execute_values(
-        cursor,
-        query,
-        values,
-        template=template,
-        fetch=True
-    )
-
-    count_inserted = len(inserted_rows)
-    count_processed = len(values)
-    count_skipped = count_processed - count_inserted
-
+    inserted_rows = execute_values(cursor, query, values, template=template, fetch=True)
     conn.commit()
+
+    count_inserted  = len(inserted_rows)
+    count_processed = len(values)
 
     return {
         "processed": count_processed,
-        "inserted": count_inserted,
-        "skipped": count_skipped
+        "inserted":  count_inserted,
+        "skipped":   count_processed - count_inserted,
     }
 
 
-def write_import_log(conn, status, log_info, hinweis=None):
+# ─── Log ─────────────────────────────────────────────────────────────────────
 
+def write_import_log(conn, status: str, log_info: dict, hinweis: str = None):
     cursor = conn.cursor()
-
     cursor.execute("""
         INSERT INTO import_log (
-            quelle,
-            beendet_am,
-            status,
-            verarbeitet,
-            hinzugef,
-            verworfen,
-            hinweis
+            quelle, beendet_am, status,
+            verarbeitet, hinzugef, verworfen, hinweis
         )
         VALUES (%s, NOW(), %s, %s, %s, %s, %s)
     """, (
-        "regionalatlas",
+        QUELLE,
         status,
         log_info.get("processed"),
         log_info.get("inserted"),
         log_info.get("skipped"),
-        hinweis
+        hinweis or DATEINAME,   # ← Dateiname als Identifikator
     ))
-
     conn.commit()
 
 
+# ─── Main ────────────────────────────────────────────────────────────────────
+
+def create_connection():
+    return psycopg2.connect(**DB_CONFIG)
+
+
 def main():
-
     conn = None
-
     try:
-
-        print("laden")
-        gdf = load_geojson()
-
-        print("transform")
-        gdf = transform_data(gdf)
-
-        print("conn")
         conn = create_connection()
 
+        if already_imported(conn):
+            print(f"  ↷ {DATEINAME} bereits importiert — übersprungen")
+            return
 
-        print("insert")
+        gdf      = load_geojson()
+        gdf      = transform_data(gdf)
         log_info = insert_data(conn, gdf)
 
+        print(f"  Verarbeitet: {log_info['processed']}")
+        print(f"  Neu:         {log_info['inserted']}")
+        print(f"  Übersprungen:{log_info['skipped']}")
 
-        print("log")
-        write_import_log(
-            conn,
-            status="success",
-            log_info=log_info
-        )
+        write_import_log(conn, status="success", log_info=log_info)
+        print(f"  ✓ {DATEINAME} erfolgreich importiert")
+
+    except FileNotFoundError as e:
+        print(f"  FEHLER: {e}")
 
     except Exception as e:
-
+        print(f"  FEHLER: {e}")
         if conn:
-            write_import_log(
-                conn,
-                status="failed",
-                log_info={
-                    "processed": 0,
-                    "inserted": 0,
-                    "skipped": 0
-                },
-                hinweis=str(e)
-            )
+            write_import_log(conn, status="failed",
+                log_info={"processed": 0, "inserted": 0, "skipped": 0},
+                hinweis=str(e))
     finally:
         if conn:
             conn.close()

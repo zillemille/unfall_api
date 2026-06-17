@@ -11,25 +11,36 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CSV_DIR  = BASE_DIR / "unfallatlas"
 
 
-def find_csv_files() -> list[Path]:
+def find_csv_files(conn) -> list[Path]:
     """
-    Sucht alle CSV-Dateien im Unfallatlas-Verzeichnis.
-    Gibt eine sortierte Liste zurück (älteste Jahrgänge zuerst).
+    Gibt nur Dateien zurück, die noch nicht vollständig importiert wurden.
+    Vergleicht Dateinamen mit import_log.
     """
-    files = sorted(CSV_DIR.glob("*.csv"))
+    all_files = sorted(CSV_DIR.glob("*.csv"))
 
-    if not files:
-        raise FileNotFoundError(
-            f"Keine CSV-Dateien in {CSV_DIR} gefunden. "
-            f"Bitte Unfallatlas-Dateien (z.B. Unfallorte2024_LinRef.csv) "
-            f"in diesen Ordner legen."
-        )
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT hinweis
+        FROM import_log
+        WHERE quelle = 'unfallatlas'
+          AND status = 'success'
+          AND hinweis IS NOT NULL
+    """)
+    imported = {row[0] for row in cursor.fetchall()}
 
-    print(f"{len(files)} CSV-Datei(en) gefunden:")
-    for f in files:
-        print(f"  - {f.name}")
+    new_files     = [f for f in all_files if f.name not in imported]
+    already_done  = [f for f in all_files if f.name in imported]
 
-    return files
+    print(f"  Dateien gesamt:        {len(all_files)}")
+    print(f"  Bereits importiert:    {len(already_done)}")
+    print(f"  Neu zu verarbeiten:    {len(new_files)}")
+
+    for f in already_done:
+        print(f"    ↷ übersprungen: {f.name}")
+    for f in new_files:
+        print(f"    → neu:          {f.name}")
+
+    return new_files
 
 
 def load_csv(path: Path) -> pd.DataFrame:
@@ -51,6 +62,25 @@ def load_csv(path: Path) -> pd.DataFrame:
 
     print(f"  {len(df)} Zeilen geladen aus {path.name}")
     return df
+
+
+def write_import_log(conn, status, log_info, dateiname=None, hinweis=None):
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO import_log (
+            quelle, beendet_am, status,
+            verarbeitet, hinzugef, verworfen, hinweis
+        )
+        VALUES (%s, NOW(), %s, %s, %s, %s, %s)
+    """, (
+        "unfallatlas",
+        status,
+        log_info.get("processed"),
+        log_info.get("inserted"),
+        log_info.get("skipped"),
+        dateiname or hinweis,
+    ))
+    conn.commit()
 
 
 def transform_data(df: pd.DataFrame) -> pd.DataFrame:
@@ -189,62 +219,49 @@ def enrich_geodata(conn):
     conn.commit()
 
 
-def write_import_log(conn, status, log_info, hinweis=None):
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO import_log (
-            quelle, beendet_am, status,
-            verarbeitet, hinzugef, verworfen, hinweis
-        )
-        VALUES (%s, NOW(), %s, %s, %s, %s, %s)
-    """, (
-        "unfallatlas",
-        status,
-        log_info.get("processed"),
-        log_info.get("inserted"),
-        log_info.get("skipped"),
-        hinweis,
-    ))
-    conn.commit()
-
-
 def main():
     conn = None
     try:
-        # Alle CSV-Dateien im Verzeichnis einlesen und zusammenführen
-        csv_files = find_csv_files()
+        conn = create_connection()
 
-        frames = []
+        csv_files = find_csv_files(conn)
+
+        if not csv_files:
+            print("Keine neuen Dateien zu importieren.")
+            return
+
         for path in csv_files:
-            print(f"\nLade {path.name}...")
-            df = load_csv(path)
-            df = transform_data(df)
-            frames.append(df)
+            print(f"\n=== {path.name} ===")
+            try:
+                df = load_csv(path)
+                df = transform_data(df)
 
-        df_all = pd.concat(frames, ignore_index=True)
+                log_info = insert_data(conn, df)
 
-        # Duplikate innerhalb des Gesamtdatensatzes entfernen
-        # (falls dieselbe extern_id in mehreren Dateien vorkommt)
-        before = len(df_all)
-        df_all = df_all.drop_duplicates(subset=["UIDENTSTLAE"])
-        dupes  = before - len(df_all)
-        if dupes:
-            print(f"\n{dupes} dateiübergreifende Duplikate entfernt")
+                print(f"  Verarbeitet: {log_info['processed']}")
+                print(f"  Neu:         {log_info['inserted']}")
+                print(f"  Übersprungen:{log_info['skipped']}")
 
-        print(f"\nGesamt: {len(df_all)} Datensätze aus {len(csv_files)} Datei(en)")
+                write_import_log(
+                    conn,
+                    status="success",
+                    log_info=log_info,
+                    dateiname=path.name,
+                )
 
-        conn     = create_connection()
-        log_info = insert_data(conn, df_all)
-
-        print(f"\nImport abgeschlossen:")
-        print(f"  Verarbeitet: {log_info['processed']}")
-        print(f"  Neu:         {log_info['inserted']}")
-        print(f"  Übersprungen (bereits vorhanden): {log_info['skipped']}")
+            except Exception as e:
+                print(f"  FEHLER bei {path.name}: {e}")
+                write_import_log(
+                    conn,
+                    status="failed",
+                    log_info={"processed": 0, "inserted": 0, "skipped": 0},
+                    dateiname=path.name,
+                    hinweis=str(e),
+                )
+                continue
 
         print("\nGeodaten anreichern...")
         enrich_geodata(conn)
-
-        write_import_log(conn, status="success", log_info=log_info)
         print("\nETL erfolgreich abgeschlossen")
 
     except FileNotFoundError as e:
@@ -252,13 +269,6 @@ def main():
 
     except Exception as e:
         print(f"\nFEHLER: {e}")
-        if conn:
-            write_import_log(
-                conn,
-                status="failed",
-                log_info={"processed": 0, "inserted": 0, "skipped": 0},
-                hinweis=str(e),
-            )
 
     finally:
         if conn:
