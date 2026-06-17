@@ -1,6 +1,6 @@
 import psycopg2
 
-from data.const.constants import DB_CONFIG
+from data.utils.utils import DB_CONFIG
 
 
 def get_connection():

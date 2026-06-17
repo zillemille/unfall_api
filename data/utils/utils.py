@@ -1,4 +1,4 @@
-
+import psycopg2
 import os
 
 # Datenbankkennungen
@@ -10,6 +10,27 @@ DB_CONFIG = {
     "dbname":   os.getenv("DB_NAME", "dbw_db"),
 }
 
+def create_connection():
+    return psycopg2.connect(**DB_CONFIG)
+
+
+def write_import_log(conn, status: str, log_info: dict, hinweis: str = None, source: str = None, filename: str = None):
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO import_log (
+            quelle, beendet_am, status,
+            verarbeitet, hinzugef, verworfen, hinweis
+        )
+        VALUES (%s, NOW(), %s, %s, %s, %s, %s)
+    """, (
+        source,
+        status,
+        log_info.get("processed"),
+        log_info.get("inserted"),
+        log_info.get("skipped"),
+        hinweis or filename,
+    ))
+    conn.commit()
 
 
 

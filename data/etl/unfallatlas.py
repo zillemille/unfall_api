@@ -1,14 +1,15 @@
 import pandas as pd
-import psycopg2
 
 from psycopg2.extras import execute_values
 from pathlib import Path
 
-from data.const.constants import DB_CONFIG
+from data.utils.utils import create_connection, write_import_log
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CSV_DIR  = BASE_DIR / "unfallatlas"
+
+SOURCE = "unfallatlas"
 
 
 def find_csv_files(conn) -> list[Path]:
@@ -64,25 +65,6 @@ def load_csv(path: Path) -> pd.DataFrame:
     return df
 
 
-def write_import_log(conn, status, log_info, dateiname=None, hinweis=None):
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO import_log (
-            quelle, beendet_am, status,
-            verarbeitet, hinzugef, verworfen, hinweis
-        )
-        VALUES (%s, NOW(), %s, %s, %s, %s, %s)
-    """, (
-        "unfallatlas",
-        status,
-        log_info.get("processed"),
-        log_info.get("inserted"),
-        log_info.get("skipped"),
-        dateiname or hinweis,
-    ))
-    conn.commit()
-
-
 def transform_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     Bereitet die Rohdaten für den DB-Import vor.
@@ -115,10 +97,6 @@ def transform_data(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.dropna(subset=["UIDENTSTLAE"])
     return df
-
-
-def create_connection():
-    return psycopg2.connect(**DB_CONFIG)
 
 
 def insert_data(conn, df: pd.DataFrame) -> dict:
@@ -246,7 +224,8 @@ def main():
                     conn,
                     status="success",
                     log_info=log_info,
-                    dateiname=path.name,
+                    filename=path.name,
+                    source=SOURCE
                 )
 
             except Exception as e:
@@ -255,8 +234,9 @@ def main():
                     conn,
                     status="failed",
                     log_info={"processed": 0, "inserted": 0, "skipped": 0},
-                    dateiname=path.name,
+                    filename=path.name,
                     hinweis=str(e),
+                    source=SOURCE
                 )
                 continue
 

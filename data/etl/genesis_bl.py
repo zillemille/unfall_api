@@ -1,16 +1,14 @@
 import pandas as pd
-import psycopg2
 from psycopg2.extras import execute_values
 from pathlib import Path
 
-from data.const.constants import DB_CONFIG
-from data.const.constants import BUNDESLAENDER
+from data.utils.utils import BUNDESLAENDER, create_connection, write_import_log
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CSV_PATH = BASE_DIR / "genesis" / "bevoelkerung_bundeslaender.csv"
 
-DATEINAME = CSV_PATH.name   # "bevoelkerung_bundeslaender.csv"
-QUELLE    = "genesis_bl"
+FILENAME = CSV_PATH.name   # "bevoelkerung_bundeslaender.csv"
+SOURCE    = "genesis_bl"
 
 
 # ─── Bereits importiert? ─────────────────────────────────────────────────────
@@ -23,7 +21,7 @@ def already_imported(conn) -> bool:
           AND status = 'success'
           AND hinweis = %s
         LIMIT 1
-    """, (QUELLE, DATEINAME))
+    """, (SOURCE, FILENAME))
     return cursor.fetchone() is not None
 
 
@@ -50,7 +48,6 @@ def load_csv() -> pd.DataFrame:
 def transform_data(df: pd.DataFrame) -> pd.DataFrame:
     bundesland_col = df.columns[0]
 
-    # Qualitätsspalten (.1-Suffix) überspringen
     jahr_spalten = [
         col for col in df.columns[1:]
         if not str(col).endswith(".1")
@@ -126,32 +123,7 @@ def insert_data(conn, df: pd.DataFrame) -> dict:
     }
 
 
-# ─── Log ─────────────────────────────────────────────────────────────────────
-
-def write_import_log(conn, status: str, log_info: dict, hinweis: str = None):
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO import_log (
-            quelle, beendet_am, status,
-            verarbeitet, hinzugef, verworfen, hinweis
-        )
-        VALUES (%s, NOW(), %s, %s, %s, %s, %s)
-    """, (
-        QUELLE,
-        status,
-        log_info.get("processed"),
-        log_info.get("inserted"),
-        log_info.get("skipped"),
-        hinweis or DATEINAME,
-    ))
-    conn.commit()
-
-
 # ─── Main ────────────────────────────────────────────────────────────────────
-
-def create_connection():
-    return psycopg2.connect(**DB_CONFIG)
-
 
 def main():
     conn = None
@@ -159,7 +131,7 @@ def main():
         conn = create_connection()
 
         if already_imported(conn):
-            print(f"  ↷ {DATEINAME} bereits importiert — übersprungen")
+            print(f"  ↷ {FILENAME} bereits importiert — übersprungen")
             return
 
         df       = load_csv()
@@ -170,8 +142,8 @@ def main():
         print(f"  Verarbeitet: {log_info['processed']}")
         print(f"  Neu/aktualisiert: {log_info['inserted']}")
 
-        write_import_log(conn, status="success", log_info=log_info)
-        print(f"  ✓ {DATEINAME} erfolgreich importiert")
+        write_import_log(conn, status="success", log_info=log_info, source=SOURCE, filename=FILENAME)
+        print(f"  ✓ {FILENAME} erfolgreich importiert")
 
     except FileNotFoundError as e:
         print(f"  FEHLER: {e}")

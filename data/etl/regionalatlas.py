@@ -1,17 +1,15 @@
 import geopandas as gpd
 import pandas as pd
-import psycopg2
 from psycopg2.extras import execute_values
 from pathlib import Path
 
-from data.const.constants import DB_CONFIG
-from data.const.constants import BUNDESLÄNDER_AGS
+from data.utils.utils import BUNDESLÄNDER_AGS,create_connection, write_import_log
 
 BASE_DIR    = Path(__file__).resolve().parent.parent
 GEOJSON_PATH = BASE_DIR / "regionalatlas" / "regionalatlas.geojson"
 
-DATEINAME = GEOJSON_PATH.name   # "regionalatlas.geojson"
-QUELLE    = "regionalatlas"
+FILENAME = GEOJSON_PATH.name   # "regionalatlas.geojson"
+SOURCE    = "regionalatlas"
 
 
 # ─── Bereits importiert? ─────────────────────────────────────────────────────
@@ -28,7 +26,7 @@ def already_imported(conn) -> bool:
           AND status = 'success'
           AND hinweis = %s
         LIMIT 1
-    """, (QUELLE, DATEINAME))
+    """, (SOURCE, FILENAME))
     return cursor.fetchone() is not None
 
 
@@ -40,7 +38,7 @@ def load_geojson() -> gpd.GeoDataFrame:
             f"GeoJSON nicht gefunden: {GEOJSON_PATH}\n"
             f"Bitte Datei unter data/regionalatlas/ ablegen."
         )
-    print(f"  Lade {DATEINAME}...")
+    print(f"  Lade {FILENAME}...")
     gdf = gpd.read_file(GEOJSON_PATH)
     print(f"  {len(gdf)} Features geladen")
     return gdf
@@ -144,32 +142,7 @@ def insert_data(conn, gdf: pd.DataFrame) -> dict:
     }
 
 
-# ─── Log ─────────────────────────────────────────────────────────────────────
-
-def write_import_log(conn, status: str, log_info: dict, hinweis: str = None):
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO import_log (
-            quelle, beendet_am, status,
-            verarbeitet, hinzugef, verworfen, hinweis
-        )
-        VALUES (%s, NOW(), %s, %s, %s, %s, %s)
-    """, (
-        QUELLE,
-        status,
-        log_info.get("processed"),
-        log_info.get("inserted"),
-        log_info.get("skipped"),
-        hinweis or DATEINAME,   # ← Dateiname als Identifikator
-    ))
-    conn.commit()
-
-
 # ─── Main ────────────────────────────────────────────────────────────────────
-
-def create_connection():
-    return psycopg2.connect(**DB_CONFIG)
-
 
 def main():
     conn = None
@@ -177,7 +150,7 @@ def main():
         conn = create_connection()
 
         if already_imported(conn):
-            print(f"  ↷ {DATEINAME} bereits importiert — übersprungen")
+            print(f"  ↷ {FILENAME} bereits importiert — übersprungen")
             return
 
         gdf      = load_geojson()
@@ -188,8 +161,8 @@ def main():
         print(f"  Neu:         {log_info['inserted']}")
         print(f"  Übersprungen:{log_info['skipped']}")
 
-        write_import_log(conn, status="success", log_info=log_info)
-        print(f"  ✓ {DATEINAME} erfolgreich importiert")
+        write_import_log(conn, status="success", log_info=log_info, source=SOURCE, filename=FILENAME)
+        print(f"  ✓ {FILENAME} erfolgreich importiert")
 
     except FileNotFoundError as e:
         print(f"  FEHLER: {e}")
