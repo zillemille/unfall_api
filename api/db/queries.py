@@ -12,23 +12,34 @@ from fastapi import HTTPException
 
 @contextmanager
 def _cursor():
-    conn = get_connection()
+    """
+    Context Manager: gibt einen Cursor zurück, schließt Connection sicher
+    und übersetzt Datenbankfehler in aussagekräftige HTTP-Antworten.
+    """
     try:
-        cur = conn.cursor()
-        yield cur
-        conn.commit()
-    except psycopg2.OperationalError as e:
-        # DB nicht erreichbar
+        conn = get_connection()
+    except psycopg2.OperationalError:
         raise HTTPException(
             status_code=503,
             detail="Datenbankverbindung nicht verfügbar."
         )
+
+    try:
+        cur = conn.cursor()
+        yield cur
+        conn.commit()
+    except psycopg2.OperationalError:
+        raise HTTPException(
+            status_code=503,
+            detail="Datenbankverbindung während der Abfrage verloren."
+        )
     except psycopg2.Error as e:
-        # Query-Fehler
+        conn.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Datenbankfehler: {e.pgcode}"
+            detail=f"Datenbankfehler ({e.pgcode or 'unbekannt'}): {e.pgerror or str(e)}"
         )
+
     finally:
         conn.close()
 

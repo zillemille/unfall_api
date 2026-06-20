@@ -51,31 +51,6 @@ dbw_projekt/
 - Docker Desktop
 - Python 3.12+ (nur für lokale Entwicklung)
 
-## Unfalldaten importieren
-### 1. Ordnerstruktur erkennen
-- siehe Projektstruktur
-
-### 2. Daten importieren
-- bei unfallatlas alle daten als csv importieren -> Namen sind egal, 
- da alles eingelesen wird, was eine csv ist
--> https://www.opengeodata.nrw.de/produkte/transport_verkehr/unfallatlas/
-
-
-- bei regionalatlas von der seite die geojson importieren -> zwingend als regionalatlas.geojson
--> https://regionalatlas.statistikportal.de/#
-
-
-- bei GENESIS unter der nachfolgenden Seite die Daten downloaden
-- folgende müssen heruntergeladen werden:
-  - Bundesländer
-    - Code: 12411-0010
-    - Tabelle: Bevölkerung: Bundesländer, Stichtag
-    - importieren als: bevoelkerung_bundeslaender.csv
-  - Kreise:
-    - Code: 12411-0015
-    - Tabelle: Bevölkerung: Kreise, Stichtag
-    - importieren als: bevoelkerung_kreis.csv
-- https://genesis.destatis.de/datenbank/online/statistic/12411/details/search/s/QmV2JUMzJUI2bGtlcnVuZw%3D%3D
 ---
 
 ## Quickstart mit Docker
@@ -108,7 +83,7 @@ Fertig. Die Anwendung ist erreichbar unter:
 
 ---
 
-## Lokale Entwicklung (ohne Docker, unwichtig für Bewertung)
+## Lokale Entwicklung (ohne Docker)
 
 ### Umgebung einrichten
 
