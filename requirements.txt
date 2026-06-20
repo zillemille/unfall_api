@@ -11,3 +11,6 @@ pyproj
 pydantic
 streamlit
 sqlalchemy
+folium
+streamlit-folium
+plotly

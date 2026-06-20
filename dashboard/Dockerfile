@@ -2,7 +2,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir streamlit requests
+# Nur die Pakete die das Dashboard braucht
+RUN pip install --no-cache-dir \
+    streamlit \
+    requests \
+    folium \
+    streamlit-folium \
+    plotly \
+    pandas
 
 COPY app.py .
 

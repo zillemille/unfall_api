@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 
-from api.db.queries import get_per_capita, search_regions, get_license_note, validate_ags, get_map_region
+from api.db.queries import search_regions, get_license_note
 
 router = APIRouter(prefix="/regions", tags=["Regionen"])
 
@@ -25,21 +25,5 @@ def regions(
 ):
     return {
         "regions": search_regions(name, level, ags_prefix),
-        "_lizenzen": get_license_note("regionalatlas")
-    }
-
-@router.get(
-    "/map_region",
-    summary="Karte einer Region",
-    description="""
-    Gibt die Karte einer Region per AGS_Präfix zurück.
-    """
-)
-def map_region(
-        ags_prefix: str,
-):
-    validate_ags(ags_prefix)
-    return {
-        "map": get_map_region(ags_prefix),
-        "_lizenzen": get_license_note("regionalatlas")
+        "_lizenz": get_license_note("regionalatlas")
     }

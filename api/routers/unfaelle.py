@@ -79,7 +79,7 @@ def earliest(
         examples=["05"]
     )
 ):
-    _validate_ags(ags_prefix)
+    validate_ags(ags_prefix)
     year = get_earliest_year(ags_prefix)
     if year is None:
         raise HTTPException(
@@ -102,11 +102,14 @@ def earliest(
     description="""
 Zählt Unfälle für eine Region mit optionalen Filtern.
 
-**Unfallkategorien:**
+**Hinweis:** Der Datensatz enthält ausschließlich Unfälle mit
+Personenschäden (Getötete, Schwerverletzte, Leichtverletzte).
+Sachschäden ohne Personenbeteiligung sind nicht enthalten.
+
+**Unfallkategorien** (Schwere des Personenschadens):
 - `1` = Unfall mit Getöteten
 - `2` = Unfall mit Schwerverletzten
 - `3` = Unfall mit Leichtverletzten
-
 **Beteiligte:** `ist_rad`, `ist_fuss`, `ist_pkw`, `ist_kraftrad` als Boolean-Filter.
     """,
 )
@@ -129,7 +132,6 @@ def count(
     return {
         "region":     ags_prefix,
         "year":       year,
-        "kategorie":  kategorien,
         "count":      result,
         "_lizenz":    get_license_note("unfallatlas", "regionalatlas"),
     }

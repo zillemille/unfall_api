@@ -10,6 +10,8 @@ app.include_router(unfaelle.router)
 app.include_router(metadata.router)
 app.include_router(regionen.router)
 
+app.include_router(map.router)
+
 
 @app.get("/")
 def root():

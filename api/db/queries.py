@@ -58,14 +58,15 @@ def get_license_note(*quellen_keys: str) -> dict:
     }
 
 
-def validate_ags(ags_prefix: str) -> str:
+def validate_ags(ags_prefix: str | None) -> None:
+    if ags_prefix is None:
+        return
     if not re.match(r"^\d{2,8}$", ags_prefix):
         raise HTTPException(
             status_code=422,
             detail=f"Ungültiges AGS-Format '{ags_prefix}'. "
                    f"Erwartet: 2–8 Ziffern, z.B. '05' oder '14522'."
         )
-    return ags_prefix
 
 
 # ─── Einfache Abfragen ───────────────────────────────────────────────────────
@@ -484,5 +485,41 @@ def get_map_region(
             WHERE ags LIKE %(ags)s
             ORDER BY name
             """, {"ags": f"{ags_prefix}%"})
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def get_accident_points(
+    ags_prefix: str,
+    year: int,
+    kategorie: int | None = None,
+    limit: int = 5000,
+) -> list[dict]:
+    """
+    Gibt Unfallkoordinaten für eine Region zurück.
+    Nur Unfälle mit gesetzter Geometrie werden zurückgegeben.
+    """
+    with _cursor() as cur:
+        cur.execute("""
+            SELECT
+                ST_Y(u.geom) AS lat,
+                ST_X(u.geom) AS lon,
+                u.kategorie,
+                u.ist_rad,
+                u.ist_fuss,
+                u.ist_pkw
+            FROM unfaelle u
+            JOIN regionen r ON u.region_id = r.region_id
+            WHERE r.ags    LIKE %(prefix)s
+              AND u.jahr   = %(year)s
+              AND u.geom   IS NOT NULL
+              AND (%(kat)s IS NULL OR u.kategorie = %(kat)s)
+            LIMIT %(limit)s
+        """, {
+            "prefix": f"{ags_prefix}%",
+            "year":   year,
+            "kat":    kategorie,
+            "limit":  limit,
+        })
         cols = [d.name for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
