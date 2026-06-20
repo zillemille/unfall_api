@@ -15,13 +15,15 @@ def run_step(name, func):
 
 
 def main():
-
     run_step("Regionalatlas", regionalatlas.main)
     run_step("Unfallatlas", unfallatlas.main)
-    run_step("GENESIS Bundesland", genesis_bl.main)
-    run_step("GENESIS Kreis", genesis_kreis.main)
+    run_step("GENESIS Bundesländer", genesis_bl.main)
+    run_step("GENESIS Kreise", genesis_kreis.main)
 
-    run_step("checks", checks.run_checks)
+    print(f"\n=== Checks ===")
+    summary = checks.run_checks()
+    if summary["status"] == "fehler":
+        print("⚠ ETL abgeschlossen, aber Datenqualität weist Fehler auf — siehe oben.")
 
 
 if __name__ == "__main__":
