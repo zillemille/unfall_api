@@ -35,8 +35,14 @@ dbw_projekt/
 │   │   ├── genesis_kreis.py    # Bevölkerung Kreise
 │   │   └── checks.py           # Plausibilitätsprüfungen
 │   ├── genesis/                # Bevölkerungsdaten (CSV)
+│        ├── bevoelkerung_bundeslaender.csv                # zu importierende Genesisdatei Bundesländer (siehe unter 3. Daten importieren)
+│        └── bevoelkerung_kreis.csv                        # zu importierende Genesisdatei Kreise (siehe unter 3. Daten importieren)
 │   ├── regionalatlas/          # Geodaten (GeoJSON)
+│        └── regionalatlas.csv                             # zu importierende Regionalatlasdatei (siehe unter 3. Daten importieren)
 │   └── unfallatlas/            # Unfalldaten (CSV, mehrere Jahre)
+│        ├── Unfalldaten2024.csv
+│        ├── ...                                           # zu importierende Unfallatlasdateien (siehe unter 3. Daten importieren)
+│        └── Unfalldaten2020.csv                           # Namen der einzelnen Dateien kann beliebig solange csv-Dateien
 ├── scripts/
 │   └── init_db.sql             # Datenbankschema
 ├── Dockerfile                  # Image für API + ETL
@@ -68,13 +74,14 @@ docker compose up -d db api dashboard
 ```
 
 ### 3. Daten importieren
-- bei unfallatlas alle daten als csv importieren -> Namen sind egal, 
+- bei unfallatlas alle daten als csv importieren (also z.B. "Unfallorte2024_EPSG25832_CSV.") -> Namen sind egal, 
  da alles eingelesen wird, was eine csv ist
 -> https://www.opengeodata.nrw.de/produkte/transport_verkehr/unfallatlas/
+- getestet mit Datensatz von 2024 und 2023
 
 
 - bei regionalatlas von der seite die geojson importieren -> zwingend als regionalatlas.geojson
--> https://regionalatlas.statistikportal.de/#
+-> https://regionalatlas.statistikportal.de/# → "OpenData" → "Download GeoJSON"
 
 
 - bei GENESIS unter der nachfolgenden Seite die Daten downloaden

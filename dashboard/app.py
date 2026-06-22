@@ -124,8 +124,8 @@ def display_response(data: dict, error: str):
         df = pd.DataFrame(data["data"])
         if not df.empty and "unfaelle" in df.columns:
             fig = px.bar(
-                df.sort_values("unfaelle", ascending=True),
-                x="unfaelle", y="name", orientation="h",
+                df.head(10).sort_values("unfaelle_pro_km2", ascending=True),
+                x="unfaelle_pro_km2", y="name", orientation="h",
                 title=f"Unfälle nach {data.get('level', '')} — {data.get('year', '')}",
             )
             st.plotly_chart(fig, use_container_width=True)
