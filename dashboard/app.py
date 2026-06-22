@@ -244,121 +244,7 @@ with st.expander("(Bonus) Kreise ohne Unfälle in einem Jahr"):
         display_response(data, error)
 
 
-# ──────── nützliche Abfragen ────────────────────────────
-
-st.header("nützliche Abfragen")
-
-with st.expander("Ags zu Regionennamen bekommen"):
-    region_name = st.text_input("Regionennamen", key="region_name")
-    level = st.text_input("Level", key="level")
-    ags_pre = st.text_input("AGS-Präfix", key="ags_pre")
-    if st.button("Abfragen", key="ags_search"):
-        params = {}
-        if region_name: params["name"] = region_name
-        if level:       params["level"] = level
-        if ags_pre:     params["ags_prefix"] = ags_pre
-        data, error = api_get("/regions/", params=params)
-        display_response(data, error)
-
-
-
-# ──────────────── Map ────────────────────────────────────────────────
-
-st.divider()
-st.header("🗺️ Kartenansicht")
-
-col1, col2, col3 = st.columns(3)
-ags_map  = col1.text_input("AGS-Präfix", value="14", key="map_ags")
-year_map = col2.number_input("Jahr", value=2024, min_value=2000, max_value=2100, key="map_year")
-kat_map  = col3.selectbox(
-    "Kategorie",
-    [None, 1, 2, 3],
-    format_func=lambda x: "Alle" if x is None else {
-        1: "🔴 Getötete",
-        2: "🟠 Schwerverletzte",
-        3: "🟡 Leichtverletzte"
-    }[x],
-    key="map_kat"
-)
-
-if st.button("Karte laden", key="map_btn"):
-
-    region_data, err1 = cached_api_get("/map/region", ags_prefix=ags_map)
-    accident_data, err2 = cached_api_get(
-        "/map/accidents",
-        ags_prefix=ags_map,
-        year=year_map,
-        limit=5000,
-        **({"kategorie": kat_map} if kat_map is not None else {})
-    )
-
-    if err1 or err2:
-        st.error(err1 or err2)
-        st.session_state["map_data"] = None     # ← Fehler: alten Stand löschen
-    else:
-        # ← Daten im Session State speichern statt direkt rendern
-        st.session_state["map_data"] = {
-            "region":    region_data,
-            "accidents": accident_data,
-            "ags":       ags_map,
-            "year":      year_map,
-        }
-
-# ← Karte wird aus Session State gerendert — bleibt nach Interact erhalten
-if st.session_state.get("map_data"):
-    map_data = st.session_state["map_data"]
-
-    region_data   = map_data["region"]
-    accident_data = map_data["accidents"]
-
-    FARBEN = {1: "red", 2: "orange", 3: "yellow", None: "blue"}
-
-    m = folium.Map(location=[51.0, 10.5], zoom_start=6)
-
-    for feature in region_data.get("map", []):
-        geojson = json.loads(feature["geojson"])
-        folium.GeoJson(
-            geojson,
-            name=feature["name"],
-            style_function=lambda _: {
-                "fillColor": "transparent",
-                "color":     "#3388ff",
-                "weight":    2,
-            },
-        ).add_to(m)
-
-    punkte = accident_data.get("punkte", [])
-    for p in punkte:
-        folium.CircleMarker(
-            location=[p["lat"], p["lon"]],
-            radius=3,
-            color=FARBEN.get(p["kategorie"], "blue"),
-            fill=True,
-            fill_opacity=0.7,
-            popup=folium.Popup(
-                f"Kategorie: {p['kategorie']}<br>"
-                f"Rad: {p['ist_rad']} | "
-                f"Fuß: {p['ist_fuss']} | "
-                f"PKW: {p['ist_pkw']}",
-                max_width=200,
-            ),
-        ).add_to(m)
-
-    st.caption(
-        f"{len(punkte)} Unfälle angezeigt für AGS '{map_data['ags']}' "
-        f"im Jahr {map_data['year']} (max. 5.000)"
-    )
-    st_folium(m, width=700, height=500, returned_objects=[])
-
-    st.markdown("""
-    🔴 Getötete &nbsp;&nbsp;
-    🟠 Schwerverletzte &nbsp;&nbsp;
-    🟡 Leichtverletzte
-    """)
-
-
 # ─── 1. Diagramme für Trend ──────────────────────────────────────────────────
-
 with st.expander("Jahrestrend für eine Region"):
     col1, col2, col3 = st.columns(3)
     ags_tr = col1.text_input("AGS-Präfix", value="14", key="trend_ags")
@@ -422,6 +308,121 @@ with st.expander("Top-N Regionen nach Unfallzahl"):
             st.plotly_chart(fig, use_container_width=True)
 
 
+# ──────── nützliche Abfragen ────────────────────────────
+
+st.header("nützliche Abfragen")
+
+with st.expander("Ags zu Regionennamen bekommen"):
+    region_name = st.text_input("Regionennamen", key="region_name")
+    level = st.text_input("Level", key="level")
+    ags_pre = st.text_input("AGS-Präfix", key="ags_pre")
+    if st.button("Abfragen", key="ags_search"):
+        params = {}
+        if region_name: params["name"] = region_name
+        if level:       params["level"] = level
+        if ags_pre:     params["ags_prefix"] = ags_pre
+        data, error = api_get("/regions/", params=params)
+        display_response(data, error)
+
+
+
+# ──────────────── Map ────────────────────────────────────────────────
+
+st.divider()
+st.header("🗺️ Kartenansicht")
+
+with st.expander("Kartensicht"):
+    col1, col2, col3 = st.columns(3)
+    ags_map = col1.text_input("AGS-Präfix", value="14", key="map_ags")
+    year_map = col2.number_input("Jahr", value=2024, min_value=2000, max_value=2100, key="map_year")
+    kat_map = col3.selectbox(
+        "Kategorie",
+        [None, 1, 2, 3],
+        format_func=lambda x: "Alle" if x is None else {
+            1: "🔴 Getötete",
+            2: "🟠 Schwerverletzte",
+            3: "🟡 Leichtverletzte"
+        }[x],
+        key="map_kat"
+    )
+
+    if st.button("Karte laden", key="map_btn"):
+
+        region_data, err1 = cached_api_get("/map/region", ags_prefix=ags_map)
+        accident_data, err2 = cached_api_get(
+            "/map/accidents",
+            ags_prefix=ags_map,
+            year=year_map,
+            limit=5000,
+            **({"kategorie": kat_map} if kat_map is not None else {})
+        )
+
+        if err1 or err2:
+            st.error(err1 or err2)
+            st.session_state["map_data"] = None  # ← Fehler: alten Stand löschen
+        else:
+            # ← Daten im Session State speichern statt direkt rendern
+            st.session_state["map_data"] = {
+                "region": region_data,
+                "accidents": accident_data,
+                "ags": ags_map,
+                "year": year_map,
+            }
+
+    # ← Karte wird aus Session State gerendert — bleibt nach Interact erhalten
+    if st.session_state.get("map_data"):
+        map_data = st.session_state["map_data"]
+
+        region_data = map_data["region"]
+        accident_data = map_data["accidents"]
+
+        FARBEN = {1: "red", 2: "orange", 3: "yellow", None: "blue"}
+
+        m = folium.Map(location=[51.0, 10.5], zoom_start=6)
+
+        for feature in region_data.get("map", []):
+            geojson = json.loads(feature["geojson"])
+            folium.GeoJson(
+                geojson,
+                name=feature["name"],
+                style_function=lambda _: {
+                    "fillColor": "transparent",
+                    "color": "#3388ff",
+                    "weight": 2,
+                },
+            ).add_to(m)
+
+        punkte = accident_data.get("punkte", [])
+        for p in punkte:
+            folium.CircleMarker(
+                location=[p["lat"], p["lon"]],
+                radius=3,
+                color=FARBEN.get(p["kategorie"], "blue"),
+                fill=True,
+                fill_opacity=0.7,
+                popup=folium.Popup(
+                    f"Kategorie: {p['kategorie']}<br>"
+                    f"Rad: {p['ist_rad']} | "
+                    f"Fuß: {p['ist_fuss']} | "
+                    f"PKW: {p['ist_pkw']}",
+                    max_width=200,
+                ),
+            ).add_to(m)
+
+        st.caption(
+            f"{len(punkte)} Unfälle angezeigt für AGS '{map_data['ags']}' "
+            f"im Jahr {map_data['year']} (max. 5.000)"
+        )
+        st_folium(m, width=700, height=500, returned_objects=[])
+
+        st.markdown("""
+        🔴 Getötete &nbsp;&nbsp;
+        🟠 Schwerverletzte &nbsp;&nbsp;
+        🟡 Leichtverletzte
+        """)
+
+
+
 # ─── 3. Quellangaben / Metadaten ─────────────────────────────────────────────
 
 st.divider()
@@ -459,5 +460,5 @@ with col2:
 # ─── 4. Link zur API-Dokumentation ───────────────────────────────────────────
 
 st.divider()
-api_docs_url = f"localhost:8000/docs"
+api_docs_url = f"http://localhost:8000/docs"
 st.markdown(f"📖 [API-Dokumentation (Swagger)]({api_docs_url})")

@@ -79,6 +79,21 @@ def validate_ags(ags_prefix: str | None) -> None:
                    f"Erwartet: 2–8 Ziffern, z.B. '05' oder '14522'."
         )
 
+def _normalize_ags_prefix(ags_prefix: str) -> str:
+    """
+    Normalisiert einen AGS-Präfix für LIKE-Suchen.
+
+    Bundesland-AGS enden auf 000000 — für LIKE-Suchen müssen sie
+    auf 2 Stellen gekürzt werden, da Unfälle auf Kreisebene gespeichert
+    sind und nie direkt auf einen Bundesland-Eintrag zeigen.
+
+    """
+
+    if len(ags_prefix) == 8 and ags_prefix.endswith("000000"):
+        return ags_prefix[:2]
+    if len(ags_prefix) == 8 and ags_prefix.endswith("000"):
+        return ags_prefix[:5]
+    return ags_prefix
 
 # ─── Einfache Abfragen ───────────────────────────────────────────────────────
 
@@ -95,7 +110,7 @@ def get_earliest_year(ags_prefix: str | None = None) -> int | None:
                 FROM unfaelle u
                 JOIN regionen r ON u.region_id = r.region_id
                 WHERE r.ags LIKE %(prefix)s
-            """, {"prefix": f"{ags_prefix}%"})
+            """, {"prefix": f"{_normalize_ags_prefix(ags_prefix)}%"})
         else:
             cur.execute("SELECT MIN(jahr) FROM unfaelle")
         return _fetchone(cur)
@@ -195,7 +210,7 @@ def get_accident_count(
               AND (%(ist_pkw)s      IS NULL OR u.ist_pkw      = %(ist_pkw)s)
               AND (%(ist_kraftrad)s IS NULL OR u.ist_kraftrad = %(ist_kraftrad)s)
         """, {
-            "prefix": f"{ags_prefix}%", "year": year,
+            "prefix": f"{_normalize_ags_prefix(ags_prefix)}%", "year": year,
             "kategorien": kategorien, "monat": monat, "stunde": stunde,
             "ist_rad": ist_rad, "ist_fuss": ist_fuss,
             "ist_pkw": ist_pkw, "ist_kraftrad": ist_kraftrad,
@@ -215,7 +230,7 @@ def get_available_years(ags_prefix: str) -> list[int]:
             WHERE r.ags LIKE %(prefix)s
               AND u.jahr IS NOT NULL
             ORDER BY u.jahr
-        """, {"prefix": f"{ags_prefix}%"})
+        """, {"prefix": f"{_normalize_ags_prefix(ags_prefix)}%"})
         return [row[0] for row in cur.fetchall()]
 
 
@@ -228,7 +243,7 @@ def get_pedestrian_accidents(ags_prefix: str, year: int) -> int:
             WHERE r.ags LIKE %(prefix)s
               AND u.jahr     = %(year)s
               AND u.ist_fuss = TRUE
-        """, {"prefix": f"{ags_prefix}%", "year": year})
+        """, {"prefix": f"{_normalize_ags_prefix(ags_prefix)}%", "year": year})
         return _fetchone(cur) or 0
 
 
@@ -292,7 +307,7 @@ def get_per_capita(ags_prefix: str, year: int) -> tuple[float, int] | None:
             WHERE r.ags LIKE %(prefix)s
             ORDER BY ABS(b.jahr - %(year)s)
             LIMIT 1
-        """, {"prefix": f"{ags_prefix}%", "year": year})
+        """, {"prefix": f"{_normalize_ags_prefix(ags_prefix)}%", "year": year})
 
         bev_row = cur.fetchone()
         if not bev_row:
@@ -305,7 +320,7 @@ def get_per_capita(ags_prefix: str, year: int) -> tuple[float, int] | None:
             JOIN regionen r ON u.region_id = r.region_id
             WHERE r.ags LIKE %(prefix)s
               AND u.jahr = %(year)s
-        """, {"prefix": f"{ags_prefix}%", "year": year})
+        """, {"prefix": f"{_normalize_ags_prefix(ags_prefix)}%", "year": year})
 
         unfall_count = cur.fetchone()[0]
         if einwohner == 0:
@@ -398,7 +413,7 @@ def get_trend(
             GROUP BY u.jahr
             ORDER BY u.jahr
         """, {
-            "prefix": f"{ags_prefix}%",
+            "prefix": f"{_normalize_ags_prefix(ags_prefix)}%",
             "von":    von_jahr,
             "bis":    bis_jahr,
             "kat":    kategorie,
@@ -453,7 +468,7 @@ def get_top_regions(
                         ORDER BY unfaelle DESC
                             LIMIT %(limit)s
                         """, {"year": year, "kat": kategorie,
-                              "ags_prefix": f"{ags_prefix}%" if ags_prefix else None,
+                              "ags_prefix": f"{_normalize_ags_prefix(ags_prefix)}%" if ags_prefix else None,
                               "limit": limit})
         cols = [d.name for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
@@ -480,7 +495,7 @@ def get_zero_accident_regions(
               AND r.ags   LIKE %(prefix)s
               AND u.unfall_id IS NULL
             ORDER BY r.name
-        """, {"year": year, "level": level, "prefix": f"{ags_prefix}%"})
+        """, {"year": year, "level": level, "prefix": f"{_normalize_ags_prefix(ags_prefix)}%"})
         cols = [d.name for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
@@ -495,7 +510,7 @@ def get_map_region(
             FROM regionen
             WHERE ags LIKE %(ags)s
             ORDER BY name
-            """, {"ags": f"{ags_prefix}%"})
+            """, {"ags": f"{_normalize_ags_prefix(ags_prefix)}%"})
         cols = [d.name for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
@@ -527,7 +542,7 @@ def get_accident_points(
               AND (%(kat)s IS NULL OR u.kategorie = %(kat)s)
             LIMIT %(limit)s
         """, {
-            "prefix": f"{ags_prefix}%",
+            "prefix": f"{_normalize_ags_prefix(ags_prefix)}%",
             "year":   year,
             "kat":    kategorie,
             "limit":  limit,
