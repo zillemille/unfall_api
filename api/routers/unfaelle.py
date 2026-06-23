@@ -12,7 +12,6 @@ AGS-Präfixe wichtiger Bundesländer:
 """
 
 from fastapi import APIRouter, HTTPException, Query
-import re
 
 from api.db.queries import (
     get_earliest_year,
@@ -71,6 +70,10 @@ Gibt das früheste Jahr zurück, für das Unfalldaten vorliegen.
 - Frühestes Jahr NRW:    `/accidents/earliest?ags_prefix=05`
 - Frühestes Jahr MV:     `/accidents/earliest?ags_prefix=13`
     """,
+    responses={
+        200: {"description": "Frühestes Jahr erfolgreich abgerufen"},
+        404: {"description": "Keine Daten für den angegebenen AGS-Präfix vorhanden"},
+    },
 )
 def earliest(
     ags_prefix: str | None = Query(
@@ -112,6 +115,10 @@ Sachschäden ohne Personenbeteiligung sind nicht enthalten.
 - `3` = Unfall mit Leichtverletzten
 **Beteiligte:** `ist_rad`, `ist_fuss`, `ist_pkw`, `ist_kraftrad` als Boolean-Filter.
     """,
+    responses={
+        200: {"description": "Unfallanzahl erfolgreich gezählt"},
+        422: {"description": "Ungültiger Parameter — z.B. falsches AGS-Format oder Wertebereich"},
+    },
 )
 def count(
     ags_prefix:   str            = Query(examples=["14"]),
@@ -141,6 +148,11 @@ def count(
     "/years",
     summary="Verfügbare Datenjahre je Region",
     description="Gibt alle Jahre zurück, für die in einer Region mindestens ein Unfall erfasst ist.",
+    responses={
+        200: {"description": "Liste der verfügbaren Jahre"},
+        404: {"description": "Keine Daten für den angegebenen AGS-Präfix"},
+        422: {"description": "Ungültiges AGS-Format"},
+    },
 )
 def years(
     ags_prefix: str = Query(
@@ -166,6 +178,10 @@ def years(
     "/pedestrian",
     summary="Fußgängerunfälle je Region und Jahr",
     description="Zählt Unfälle mit Fußgängerbeteiligung (`ist_fuss = true`) für eine Region.",
+    responses={
+        200: {"description": "Anzahl der Fußgängerunfälle — 0 ist ein valides Ergebnis"},
+        422: {"description": "Ungültiges AGS-Format"},
+    },
 )
 def pedestrian(
     ags_prefix: str = Query(
@@ -191,6 +207,10 @@ def pedestrian(
         "Gibt Unfallzahlen gruppiert nach Regionslevel zurück, "
         "absteigend sortiert. Levels: `bundesland`, `kreis`."
     ),
+    responses={
+        200: {"description": "Unfallzahlen gruppiert nach Region, absteigend sortiert"},
+        422: {"description": "Ungültiger Level — erlaubt: 'bundesland', 'kreis'"},
+    },
 )
 def aggregates(
     level: str = Query(
@@ -223,6 +243,11 @@ def aggregates(
         "Das verwendete Bevölkerungsjahr kann vom Abfragejahr abweichen, "
         "wenn keine exakten Daten vorliegen."
     ),
+    responses={
+        200: {"description": "Unfallrate berechnet — bevoelkerung_jahr kann vom Abfragejahr abweichen"},
+        404: {"description": "Keine Bevölkerungsdaten für diese Region vorhanden"},
+        422: {"description": "Ungültiges AGS-Format"},
+    },
 )
 def per_capita(
     ags_prefix: str = Query(examples=["14"]),
@@ -253,6 +278,11 @@ def per_capita(
         "der PostGIS-Geometrien aus `regionen`. "
         "Levels: `bundesland` oder `kreis`."
     ),
+    responses={
+        200: {"description": "Unfalldichte auf Basis der PostGIS-Geometrien"},
+        404: {"description": "Keine Daten für Jahr und Level vorhanden"},
+        422: {"description": "Ungültiger Level — erlaubt: 'bundesland', 'kreis'"},
+    },
 )
 def density(
     year:  int = Query(ge=2000, le=2100, examples=[2023]),
@@ -281,6 +311,11 @@ def density(
     "/trend",
     summary="Jahrestrend für eine Region",
     description="Unfallzahlen pro Jahr inkl. Veränderung zum Vorjahr (via SQL LAG).",
+    responses={
+        200: {"description": "Unfallzahlen pro Jahr inkl. Veränderung zum Vorjahr"},
+        404: {"description": "Keine Daten für AGS-Präfix im angegebenen Zeitraum"},
+        422: {"description": "von_jahr > bis_jahr oder ungültiges AGS-Format"},
+    },
 )
 def trend(
     ags_prefix: str = Query(examples=["14"]),
@@ -318,6 +353,11 @@ Beispiel für *„5 schlimmste Landkreise mit Todesunfällen 2024"*:
 
 Mit `ags_prefix=14` wird die Suche auf Sachsen eingeschränkt.
     """,
+    responses={
+        200: {"description": "Rangliste der unfallreichsten Regionen"},
+        404: {"description": "Keine Daten für Level und Jahr vorhanden"},
+        422: {"description": "Ungültiger Level oder AGS-Format"},
+    },
 )
 def top(
     level:      str            = Query(examples=["kreis"]),
@@ -349,6 +389,10 @@ def top(
 Gibt alle Kreise zurück, für die im angegebenen Jahr
 **kein einziger Unfall** erfasst wurde.
     """,
+    responses={
+        200: {"description": "Liste der Kreise ohne Unfälle — leere Liste ist valides Ergebnis"},
+        422: {"description": "level='bundesland' nicht unterstützt oder ungültiges AGS-Format"},
+    },
 )
 def zero_accidents(
     year:       int = Query(ge=2000, le=2100),

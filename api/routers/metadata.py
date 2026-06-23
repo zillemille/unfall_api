@@ -33,7 +33,12 @@ def sources():
 @router.get(
     "/imports",
     summary="Import-Protokoll",
-    description="Zeigt alle ETL-Läufe mit Status und Zählern.",
+    description=(
+        "Zeigt alle ETL-Läufe mit Status, Zeitstempel und Zählern. "
+        "Jeder Eintrag entspricht einem Lauf eines ETL-Skripts. "
+        "Das Feld `hinweis` enthält den Dateinamen bei erfolgreichem Import "
+        "oder die Fehlermeldung bei fehlgeschlagenem Lauf."
+    ),
 )
 def imports():
     return {"imports": get_import_runs()}
